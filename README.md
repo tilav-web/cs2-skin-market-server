@@ -97,3 +97,171 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+# CS2 Skin Market Server
+
+## Steam Authentication Backend
+
+Bu backend Steam foydalanuvchilarining ma'lumotlarini saqlash va CS2 skin inventory ni boshqarish uchun yaratilgan.
+
+## O'rnatish
+
+### 1. Dependencies o'rnatish
+```bash
+npm install
+```
+
+### 2. Environment variables sozlash
+`env.example` faylini `.env` ga nusxalab, quyidagi ma'lumotlarni to'ldiring:
+
+```env
+# Database Configuration
+MONGODB_URI=mongodb://localhost/cs2-skins
+
+# Steam API Configuration
+STEAM_API_KEY=your_steam_api_key_here
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# CORS Configuration
+CORS_ORIGIN=http://localhost:5173
+```
+
+### 3. MongoDB o'rnatish va ishga tushirish
+```bash
+# MongoDB o'rnatish (Ubuntu/Debian)
+sudo apt update
+sudo apt install mongodb
+
+# MongoDB ishga tushirish
+sudo systemctl start mongodb
+sudo systemctl enable mongodb
+```
+
+### 4. Server ishga tushirish
+```bash
+# Development mode
+npm run start:dev
+
+# Production mode
+npm run build
+npm run start:prod
+```
+
+## API Endpoints
+
+### Authentication
+- `POST /auth/steam/login` - Steam login
+- `POST /auth/steam/logout` - Steam logout
+- `GET /auth/session/validate` - Session tekshirish
+- `GET /auth/steam/:steamId/inventory` - CS2 inventory olish
+
+### Users
+- `GET /users` - Barcha foydalanuvchilar
+- `GET /users/:steamId` - Foydalanuvchi ma'lumotlari
+- `PATCH /users/:steamId` - Foydalanuvchi ma'lumotlarini yangilash
+- `DELETE /users/:steamId` - Foydalanuvchini o'chirish
+- `POST /users/:steamId/token` - Steam token yangilash
+- `POST /users/:steamId/inventory` - CS2 inventory yangilash
+- `GET /users/:steamId/inventory` - CS2 inventory olish
+- `POST /users/:steamId/favorites/:skinId` - Sevimli skin qo'shish
+- `DELETE /users/:steamId/favorites/:skinId` - Sevimli skin o'chirish
+- `POST /users/:steamId/session` - Session token qo'shish
+- `DELETE /users/:steamId/session` - Session token o'chirish
+- `POST /users/:steamId/trade` - Savdo qayd etish
+
+### Statistics
+- `GET /users/top-traders` - Eng yaxshi savdogarlar
+- `GET /users/with-inventory` - Inventory ga ega foydalanuvchilar
+
+## Database Schema
+
+### User Collection
+```typescript
+{
+  steamId: string,                    // Steam ID (unique)
+  personaname: string,               // Steam username
+  realname?: string,                 // Real name
+  profileurl: string,                // Steam profile URL
+  avatar: string,                    // Avatar URL
+  avatarmedium: string,              // Medium avatar URL
+  avatarfull: string,                // Full avatar URL
+  personastate: number,              // Online status
+  communityvisibilitystate: number,  // Profile visibility
+  profilestate: number,              // Profile state
+  lastlogoff: number,                // Last logout time
+  commentpermission: number,         // Comment permission
+  
+  // Steam authentication
+  steamToken?: string,               // Steam token
+  tokenExpiresAt?: Date,             // Token expiration
+  
+  // CS2 Inventory
+  cs2Inventory: any[],               // CS2 skins array
+  lastInventoryUpdate?: Date,        // Last inventory update
+  
+  // User settings
+  isActive: boolean,                 // Account status
+  isVerified: boolean,               // Verification status
+  roles: string[],                   // User roles
+  
+  // Trading statistics
+  tradeCount: number,                // Total trades
+  successfulTrades: number,          // Successful trades
+  favoriteSkins: string[],           // Favorite skin IDs
+  
+  // Session management
+  sessionTokens: string[],           // Active session tokens
+  lastLoginAt?: Date,                // Last login time
+  lastActivityAt?: Date,             // Last activity time
+  
+  // Timestamps
+  createdAt: Date,                   // Account creation time
+  updatedAt: Date                    // Last update time
+}
+```
+
+## Console Logs
+
+### Authentication Process:
+- 🔐 Steam login request
+- 🔍 Validating Steam user
+- ✅ Steam user data fetched
+- ✅ User created/updated
+- 🔑 Token updated
+- 🚪 User logged out
+
+### CS2 Inventory:
+- 🎮 CS2 inventory request
+- 📦 Inventory items count
+- ✅ Inventory updated
+- ✅ CS2 inventory fetched
+
+### Session Management:
+- 🔐 Session validation request
+- ✅ Session token validated
+- ✅ Session token added/removed
+
+## Features
+
+- ✅ Steam OpenID authentication
+- ✅ User data management
+- ✅ Session token management
+- ✅ CS2 inventory fetching and storage
+- ✅ Trading statistics tracking
+- ✅ Favorite skins management
+- ✅ User roles and permissions
+- ✅ Activity tracking
+- ✅ MongoDB integration
+- ✅ RESTful API endpoints
+
+## Security
+
+- Session token validation
+- Steam token expiration checking
+- User activity tracking
+- Role-based access control
+- Input validation with DTOs
+- Error handling and logging
