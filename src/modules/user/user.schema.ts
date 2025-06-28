@@ -11,6 +11,9 @@ export class User {
   @Prop({ default: null })
   phone: string; // Steam foydalanuvchi ID si
 
+  @Prop({ default: 0 })
+  balance: number;
+
   @Prop({ unique: true })
   telegram_id: string; // Telegram foydalanuvchi ID si
 

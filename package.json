@@ -27,6 +27,8 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.0.0",
     "axios": "^1.9.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
     "firebase": "^11.7.3",
     "mongoose": "^8.15.1",
     "passport": "^0.7.0",
