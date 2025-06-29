@@ -1,47 +1,26 @@
-import { IsString, IsOptional, IsDate } from 'class-validator';
+import { IsString, IsDate } from 'class-validator';
 
-export class CreateUserDto {
+export class SteamLoginDto {
+  @IsString()
+  telegram_id: string;
+
   @IsString()
   steam_id: string;
 
-  @IsOptional()
   @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  telegram_id?: string;
+  steam_token: string;
 
   @IsString()
   personaname: string;
 
-  @IsOptional()
-  @IsString()
-  steam_token?: string;
-
-  @IsOptional()
   @IsDate()
-  token_expires_at?: Date;
+  token_expires_at: Date;
 }
 
-export class UpdateUserDto {
-  @IsOptional()
+export class SteamAuthDto {
   @IsString()
-  personaname?: string;
+  telegram_id: string;
 
-  @IsOptional()
   @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  telegram_id?: string;
-
-  @IsOptional()
-  @IsString()
-  steam_token?: string;
-
-  @IsOptional()
-  @IsDate()
-  token_expires_at?: Date;
-} 
+  return_url: string;
+}

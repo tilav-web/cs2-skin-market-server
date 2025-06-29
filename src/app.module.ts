@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './modules/user/user.module';
-import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -13,7 +12,6 @@ import { AuthModule } from './modules/auth/auth.module';
       process.env.MONGODB_URI || 'mongodb://localhost/cs2-skins',
     ),
     UserModule,
-    AuthModule,
   ],
   controllers: [],
   providers: [],

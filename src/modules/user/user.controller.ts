@@ -1,117 +1,104 @@
 import {
   Controller,
-  Get,
   Post,
   Body,
-  Patch,
-  Param,
-  Delete,
+  Res,
+  HttpStatus,
+  Get,
+  Query,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UserService } from './user.service';
-import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
+import { SteamAuthService } from './steam-auth.service';
+import { SteamLoginDto, SteamAuthDto } from './dto/create-user.dto';
 
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly service: UserService,
+    private readonly steamAuthService: SteamAuthService,
+  ) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  @Post('steam-login')
+  async steamLogin(@Body() steamLoginDto: SteamLoginDto, @Res() res: Response) {
+    try {
+      const result = await this.service.auth(steamLoginDto);
+
+      // Set JWT token as HTTP-only cookie
+      res.cookie('jwt_token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure in production
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+      });
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Steam login muvaffaqiyatli!',
+        user: result.user,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
 
-  @Get()
-  findAll() {
-    return this.userService.findAll();
-  }
-
-  @Get('with-phone')
-  getUsersWithPhone() {
-    return this.userService.getUsersWithPhone();
-  }
-
-  @Get('with-telegram')
-  getUsersWithTelegram() {
-    return this.userService.getUsersWithTelegram();
-  }
-
-  @Get(':steamId')
-  findOne(@Param('steamId') steamId: string) {
-    return this.userService.findOne(steamId);
-  }
-
-  @Patch(':steamId')
-  update(
-    @Param('steamId') steamId: string,
-    @Body() updateUserDto: UpdateUserDto,
+  @Post('steam-auth/initiate')
+  async initiateSteamAuth(
+    @Body() steamAuthDto: SteamAuthDto,
+    @Res() res: Response,
   ) {
-    return this.userService.update(steamId, updateUserDto);
+    try {
+      const result = await this.steamAuthService.initiateSteamAuth(
+        steamAuthDto.telegram_id,
+        steamAuthDto.return_url,
+      );
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Steam authentication initiated',
+        data: result,
+      });
+    } catch (error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
 
-  @Delete(':steamId')
-  remove(@Param('steamId') steamId: string) {
-    return this.userService.remove(steamId);
-  }
+  @Get('steam-auth/callback')
+  async handleSteamCallback(@Query() query: any, @Res() res: Response) {
+    try {
+      const result = await this.steamAuthService.handleSteamCallback(query);
 
-  // Steam specific endpoints
-  @Post('steam/login')
-  async steamLogin(@Body() steamData: any) {
-    console.log('🔐 Steam login request:', steamData);
-    const user = await this.userService.createOrUpdateSteamUser(steamData);
-    console.log('✅ User created/updated:', user.personaname);
-    return user;
-  }
+      // Set JWT token as HTTP-only cookie
+      res.cookie('jwt_token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+      });
 
-  @Post(':steamId/token')
-  async updateToken(
-    @Param('steamId') steamId: string,
-    @Body() body: { token: string },
-  ) {
-    console.log('🔑 Updating token for Steam ID:', steamId);
-    const user = await this.userService.updateSteamToken(steamId, body.token);
-    console.log('✅ Token updated for user:', user.personaname);
-    return { success: true, message: 'Token updated successfully' };
-  }
+      // Redirect to frontend with success
+      const redirectUrl = new URL(
+        query.return_url || process.env.FRONTEND_URL || 'http://localhost:5173',
+      );
+      redirectUrl.searchParams.set('auth', 'success');
+      redirectUrl.searchParams.set('telegram_id', result.user.telegram_id);
 
-  @Post(':steamId/phone')
-  async updatePhone(
-    @Param('steamId') steamId: string,
-    @Body() body: { phone: string },
-  ) {
-    console.log('📱 Updating phone for Steam ID:', steamId);
-    const user = await this.userService.updatePhone(steamId, body.phone);
-    console.log('✅ Phone updated for user:', user.personaname);
-    return { success: true, message: 'Phone updated successfully' };
-  }
+      return res.redirect(redirectUrl.toString());
+    } catch (error) {
+      // Redirect to frontend with error
+      const redirectUrl = new URL(
+        query.return_url || process.env.FRONTEND_URL || 'http://localhost:5173',
+      );
+      redirectUrl.searchParams.set('auth', 'error');
+      redirectUrl.searchParams.set('message', error.message);
 
-  @Post(':steamId/telegram')
-  async updateTelegram(
-    @Param('steamId') steamId: string,
-    @Body() body: { telegramId: string },
-  ) {
-    console.log('📱 Updating Telegram ID for Steam ID:', steamId);
-    const user = await this.userService.updateTelegramId(
-      steamId,
-      body.telegramId,
-    );
-    console.log('✅ Telegram ID updated for user:', user.personaname);
-    return { success: true, message: 'Telegram ID updated successfully' };
-  }
-
-  @Get('phone/:phone')
-  async findByPhone(@Param('phone') phone: string) {
-    console.log('📱 Finding user by phone:', phone);
-    const user = await this.userService.findByPhone(phone);
-    return user
-      ? { success: true, user }
-      : { success: false, message: 'User not found' };
-  }
-
-  @Get('telegram/:telegramId')
-  async findByTelegramId(@Param('telegramId') telegramId: string) {
-    console.log('📱 Finding user by Telegram ID:', telegramId);
-    const user = await this.userService.findByTelegramId(telegramId);
-    return user
-      ? { success: true, user }
-      : { success: false, message: 'User not found' };
+      return res.redirect(redirectUrl.toString());
+    }
   }
 }

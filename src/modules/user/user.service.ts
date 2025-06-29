@@ -1,118 +1,74 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { JwtService } from '@nestjs/jwt';
 import { User, UserDocument } from './user.schema';
-import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
+import { SteamLoginDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private model: Model<UserDocument>,
+    private jwtService: JwtService,
+  ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
-    const createdUser = new this.userModel(createUserDto);
-    return createdUser.save();
-  }
+  async auth(steamLoginDto: SteamLoginDto) {
+    try {
+      const {
+        telegram_id,
+        steam_id,
+        steam_token,
+        personaname,
+        token_expires_at,
+      } = steamLoginDto;
 
-  async findAll(): Promise<User[]> {
-    return this.userModel.find().exec();
-  }
+      // Validate required fields
+      if (
+        !steam_id ||
+        !steam_token ||
+        !personaname ||
+        !token_expires_at ||
+        !telegram_id
+      ) {
+        throw new BadRequestException(
+          'Tizimga kirish uchun malumot yetarli emas!',
+        );
+      }
 
-  async findOne(steamId: string): Promise<User> {
-    const user = await this.userModel.findOne({ steam_id: steamId }).exec();
-    if (!user) {
-      throw new NotFoundException(`User with Steam ID ${steamId} not found`);
-    }
-    return user;
-  }
+      // Find user by telegram_id
+      const user = await this.model.findOne({ telegram_id });
+      if (!user) {
+        throw new NotFoundException('Foydalanuvchi topilmadi!');
+      }
 
-  async findBySteamId(steamId: string): Promise<User | null> {
-    return this.userModel.findOne({ steam_id: steamId }).exec();
-  }
+      // Update user's Steam information
+      user.steam_id = steam_id;
+      user.steam_token = steam_token;
+      user.personaname = personaname;
+      user.token_expires_at = token_expires_at;
+      await user.save();
 
-  async update(steamId: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const updatedUser = await this.userModel
-      .findOneAndUpdate({ steam_id: steamId }, updateUserDto, { new: true })
-      .exec();
-
-    if (!updatedUser) {
-      throw new NotFoundException(`User with Steam ID ${steamId} not found`);
-    }
-
-    return updatedUser;
-  }
-
-  async remove(steamId: string): Promise<void> {
-    const result = await this.userModel.deleteOne({ steam_id: steamId }).exec();
-    if (result.deletedCount === 0) {
-      throw new NotFoundException(`User with Steam ID ${steamId} not found`);
-    }
-  }
-
-  // Steam specific methods
-  async createOrUpdateSteamUser(steamData: any): Promise<User> {
-    const existingUser = await this.findBySteamId(steamData.steamid);
-
-    if (existingUser) {
-      // Update existing user
-      const updateData: UpdateUserDto = {
-        personaname: steamData.personaname,
+      // Generate JWT token
+      const payload = {
+        telegram_id: user.telegram_id,
+        steam_id: user.steam_id,
+        sub: user._id,
       };
 
-      return this.update(steamData.steamid, updateData);
-    } else {
-      // Create new user
-      const createData: CreateUserDto = {
-        steam_id: steamData.steamid,
-        personaname: steamData.personaname,
+      const token = this.jwtService.sign(payload, {
+        expiresIn: '7d', // Token expires in 7 days
+      });
+
+      return {
+        user,
+        token,
       };
-
-      return this.create(createData);
+    } catch (error) {
+      throw error;
     }
-  }
-
-  async updateSteamToken(steamId: string, token: string): Promise<User> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours from now
-
-    return this.update(steamId, {
-      steam_token: token,
-      token_expires_at: expiresAt,
-    });
-  }
-
-  async updatePhone(steamId: string, phone: string): Promise<User> {
-    return this.update(steamId, {
-      phone,
-    });
-  }
-
-  async updateTelegramId(steamId: string, telegramId: string): Promise<User> {
-    return this.update(steamId, {
-      telegram_id: telegramId,
-    });
-  }
-
-  async getUsersWithPhone(): Promise<User[]> {
-    return this.userModel
-      .find({
-        phone: { $exists: true, $ne: null },
-      })
-      .exec();
-  }
-
-  async getUsersWithTelegram(): Promise<User[]> {
-    return this.userModel
-      .find({
-        telegram_id: { $exists: true, $ne: null },
-      })
-      .exec();
-  }
-
-  async findByPhone(phone: string): Promise<User | null> {
-    return this.userModel.findOne({ phone }).exec();
-  }
-
-  async findByTelegramId(telegramId: string): Promise<User | null> {
-    return this.userModel.findOne({ telegram_id: telegramId }).exec();
   }
 }

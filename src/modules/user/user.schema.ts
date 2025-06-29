@@ -31,7 +31,7 @@ export class User {
 
   @Prop({
     default: 'active',
-    enum: ['avtive', 'not_active', 'block'],
+    enum: ['active', 'not_active', 'block'],
     required: true,
   })
   status: string;

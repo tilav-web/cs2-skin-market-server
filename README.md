@@ -100,168 +100,118 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 # CS2 Skin Market Server
 
-## Steam Authentication Backend
+## Steam Authentication Endpoints
 
-Bu backend Steam foydalanuvchilarining ma'lumotlarini saqlash va CS2 skin inventory ni boshqarish uchun yaratilgan.
+### 1. POST /users/steam-auth/initiate
 
-## O'rnatish
+Bu endpoint Steam authentication ni boshlash uchun ishlatiladi. Telegram Mini Apps dan chaqiriladi.
 
-### 1. Dependencies o'rnatish
-```bash
-npm install
-```
+#### Request Body
 
-### 2. Environment variables sozlash
-`env.example` faylini `.env` ga nusxalab, quyidagi ma'lumotlarni to'ldiring:
-
-```env
-# Database Configuration
-MONGODB_URI=mongodb://localhost/cs2-skins
-
-# Steam API Configuration
-STEAM_API_KEY=your_steam_api_key_here
-
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# CORS Configuration
-CORS_ORIGIN=http://localhost:5173
-```
-
-### 3. MongoDB o'rnatish va ishga tushirish
-```bash
-# MongoDB o'rnatish (Ubuntu/Debian)
-sudo apt update
-sudo apt install mongodb
-
-# MongoDB ishga tushirish
-sudo systemctl start mongodb
-sudo systemctl enable mongodb
-```
-
-### 4. Server ishga tushirish
-```bash
-# Development mode
-npm run start:dev
-
-# Production mode
-npm run build
-npm run start:prod
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /auth/steam/login` - Steam login
-- `POST /auth/steam/logout` - Steam logout
-- `GET /auth/session/validate` - Session tekshirish
-- `GET /auth/steam/:steamId/inventory` - CS2 inventory olish
-
-### Users
-- `GET /users` - Barcha foydalanuvchilar
-- `GET /users/:steamId` - Foydalanuvchi ma'lumotlari
-- `PATCH /users/:steamId` - Foydalanuvchi ma'lumotlarini yangilash
-- `DELETE /users/:steamId` - Foydalanuvchini o'chirish
-- `POST /users/:steamId/token` - Steam token yangilash
-- `POST /users/:steamId/inventory` - CS2 inventory yangilash
-- `GET /users/:steamId/inventory` - CS2 inventory olish
-- `POST /users/:steamId/favorites/:skinId` - Sevimli skin qo'shish
-- `DELETE /users/:steamId/favorites/:skinId` - Sevimli skin o'chirish
-- `POST /users/:steamId/session` - Session token qo'shish
-- `DELETE /users/:steamId/session` - Session token o'chirish
-- `POST /users/:steamId/trade` - Savdo qayd etish
-
-### Statistics
-- `GET /users/top-traders` - Eng yaxshi savdogarlar
-- `GET /users/with-inventory` - Inventory ga ega foydalanuvchilar
-
-## Database Schema
-
-### User Collection
-```typescript
+```json
 {
-  steamId: string,                    // Steam ID (unique)
-  personaname: string,               // Steam username
-  realname?: string,                 // Real name
-  profileurl: string,                // Steam profile URL
-  avatar: string,                    // Avatar URL
-  avatarmedium: string,              // Medium avatar URL
-  avatarfull: string,                // Full avatar URL
-  personastate: number,              // Online status
-  communityvisibilitystate: number,  // Profile visibility
-  profilestate: number,              // Profile state
-  lastlogoff: number,                // Last logout time
-  commentpermission: number,         // Comment permission
-  
-  // Steam authentication
-  steamToken?: string,               // Steam token
-  tokenExpiresAt?: Date,             // Token expiration
-  
-  // CS2 Inventory
-  cs2Inventory: any[],               // CS2 skins array
-  lastInventoryUpdate?: Date,        // Last inventory update
-  
-  // User settings
-  isActive: boolean,                 // Account status
-  isVerified: boolean,               // Verification status
-  roles: string[],                   // User roles
-  
-  // Trading statistics
-  tradeCount: number,                // Total trades
-  successfulTrades: number,          // Successful trades
-  favoriteSkins: string[],           // Favorite skin IDs
-  
-  // Session management
-  sessionTokens: string[],           // Active session tokens
-  lastLoginAt?: Date,                // Last login time
-  lastActivityAt?: Date,             // Last activity time
-  
-  // Timestamps
-  createdAt: Date,                   // Account creation time
-  updatedAt: Date                    // Last update time
+  "telegram_id": "string",
+  "return_url": "string"
 }
 ```
 
-## Console Logs
+#### Response
 
-### Authentication Process:
-- 🔐 Steam login request
-- 🔍 Validating Steam user
-- ✅ Steam user data fetched
-- ✅ User created/updated
-- 🔑 Token updated
-- 🚪 User logged out
+```json
+{
+  "success": true,
+  "message": "Steam authentication initiated",
+  "data": {
+    "auth_url": "https://steamcommunity.com/openid/login?...",
+    "telegram_id": "string"
+  }
+}
+```
 
-### CS2 Inventory:
-- 🎮 CS2 inventory request
-- 📦 Inventory items count
-- ✅ Inventory updated
-- ✅ CS2 inventory fetched
+### 2. GET /users/steam-auth/callback
 
-### Session Management:
-- 🔐 Session validation request
-- ✅ Session token validated
-- ✅ Session token added/removed
+Bu endpoint Steam dan qaytgan callback ni handle qiladi. Steam authentication tugagandan so'ng avtomatik ravishda chaqiriladi.
 
-## Features
+#### Query Parameters
 
-- ✅ Steam OpenID authentication
-- ✅ User data management
-- ✅ Session token management
-- ✅ CS2 inventory fetching and storage
-- ✅ Trading statistics tracking
-- ✅ Favorite skins management
-- ✅ User roles and permissions
-- ✅ Activity tracking
-- ✅ MongoDB integration
-- ✅ RESTful API endpoints
+- `openid.mode`: Steam OpenID mode
+- `openid.identity`: Steam user identity
+- `openid.claimed_id`: Steam claimed ID
+- `telegram_id`: User's Telegram ID
+- `return_url`: Frontend URL to redirect after authentication
 
-## Security
+#### Response
 
-- Session token validation
-- Steam token expiration checking
-- User activity tracking
-- Role-based access control
-- Input validation with DTOs
-- Error handling and logging
+Muvaffaqiyatli bo'lsa, frontend ga redirect qiladi:
+```
+http://localhost:5173?auth=success&telegram_id=123456789
+```
+
+Xatolik bo'lsa:
+```
+http://localhost:5173?auth=error&message=error_message
+```
+
+JWT token avtomatik ravishda HTTP-only cookie sifatida o'rnatiladi.
+
+### 3. POST /users/steam-login (Legacy)
+
+Bu endpoint to'g'ridan-to'g'ri Steam ma'lumotlari bilan login qilish uchun.
+
+#### Request Body
+
+```json
+{
+  "telegram_id": "string",
+  "steam_id": "string", 
+  "steam_token": "string",
+  "personaname": "string",
+  "token_expires_at": "2024-01-01T00:00:00.000Z"
+}
+```
+
+## Telegram Mini Apps Integration
+
+Telegram Mini Apps da Steam authentication ni quyidagicha ishlatish mumkin:
+
+```javascript
+// 1. Steam authentication ni boshlash
+const response = await fetch('/users/steam-auth/initiate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    telegram_id: window.Telegram.WebApp.initDataUnsafe.user.id,
+    return_url: window.location.origin + '/auth/callback'
+  })
+});
+
+const { data } = await response.json();
+
+// 2. Steam authentication URL ga yo'naltirish
+window.location.href = data.auth_url;
+
+// 3. Callback da authentication natijasini tekshirish
+const urlParams = new URLSearchParams(window.location.search);
+const authStatus = urlParams.get('auth');
+
+if (authStatus === 'success') {
+  // Authentication muvaffaqiyatli
+  console.log('Steam authentication successful');
+} else if (authStatus === 'error') {
+  // Xatolik
+  console.error('Authentication failed:', urlParams.get('message'));
+}
+```
+
+## Environment Variables
+
+Make sure to set the following environment variables:
+
+- `JWT_SECRET`: Secret key for JWT token signing
+- `STEAM_API_KEY`: Steam API key for Steam integration
+- `FRONTEND_URL`: Frontend URL for redirects
+- `MONGODB_URI`: MongoDB connection string
+- `NODE_ENV`: Environment (development/production)
+- `CORS_ORIGIN`: CORS origin for frontend
