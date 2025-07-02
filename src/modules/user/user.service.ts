@@ -1,74 +1,67 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { JwtService } from '@nestjs/jwt';
 import { User, UserDocument } from './user.schema';
-import { SteamLoginDto } from './dto/create-user.dto';
+import { botToken } from 'src/utils/shared';
+import { createHmac } from 'crypto';
 
 @Injectable()
 export class UserService {
-  constructor(
-    @InjectModel(User.name) private model: Model<UserDocument>,
-    private jwtService: JwtService,
-  ) {}
+  constructor(@InjectModel(User.name) public model: Model<UserDocument>) {}
 
-  async auth(steamLoginDto: SteamLoginDto) {
-    try {
-      const {
-        telegram_id,
-        steam_id,
-        steam_token,
-        personaname,
-        token_expires_at,
-      } = steamLoginDto;
+  validateInitData(initData: string): string | null {
+    const secretKey = createHmac('sha256', 'WebAppData')
+      .update(botToken)
+      .digest();
 
-      // Validate required fields
-      if (
-        !steam_id ||
-        !steam_token ||
-        !personaname ||
-        !token_expires_at ||
-        !telegram_id
-      ) {
-        throw new BadRequestException(
-          'Tizimga kirish uchun malumot yetarli emas!',
-        );
-      }
+    const params = new URLSearchParams(initData);
+    const receivedHash = params.get('hash');
+    params.delete('hash');
+    const dataCheckString = Array.from(params.entries())
+      .sort()
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
 
-      // Find user by telegram_id
-      const user = await this.model.findOne({ telegram_id });
-      if (!user) {
-        throw new NotFoundException('Foydalanuvchi topilmadi!');
-      }
+    const computedHash = createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
 
-      // Update user's Steam information
-      user.steam_id = steam_id;
-      user.steam_token = steam_token;
-      user.personaname = personaname;
-      user.token_expires_at = token_expires_at;
-      await user.save();
-
-      // Generate JWT token
-      const payload = {
-        telegram_id: user.telegram_id,
-        steam_id: user.steam_id,
-        sub: user._id,
-      };
-
-      const token = this.jwtService.sign(payload, {
-        expiresIn: '7d', // Token expires in 7 days
-      });
-
-      return {
-        user,
-        token,
-      };
-    } catch (error) {
-      throw error;
+    if (computedHash === receivedHash) {
+      const userData = JSON.parse(params.get('user') || '{}');
+      return userData.id; // telegram_id
     }
+    return null;
+  }
+
+  async linkTelegramToSteam(
+    telegramId: string,
+    steamId: string,
+    profile: any,
+  ): Promise<User> {
+    let user = await this.model.findOne({ telegram_id: telegramId });
+
+    if (!user) {
+      user = new this.model({
+        telegram_id: telegramId,
+        steam_id: steamId,
+        personaname: profile.displayName || null,
+        photo: profile.photos?.[2]?.value || null,
+        status: 'active',
+        balance: 0,
+      });
+    } else {
+      user.steam_id = steamId;
+      user.personaname = profile.displayName || user.personaname;
+      user.photo = profile.photos?.[2]?.value || user.photo;
+    }
+
+    return user.save();
+  }
+
+  async findByTelegramId(telegram_id: string) {
+    const user = await this.model
+      .findOne({ telegram_id })
+      .select('_id phone photo telegram_id balance personaname steam_id');
+    return user;
   }
 }

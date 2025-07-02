@@ -1,104 +1,75 @@
 import {
   Controller,
-  Post,
-  Body,
-  Res,
-  HttpStatus,
   Get,
+  Req,
+  Res,
+  UnauthorizedException,
+  Param,
+  UseGuards,
   Query,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { UserService } from './user.service';
-import { SteamAuthService } from './steam-auth.service';
-import { SteamLoginDto, SteamAuthDto } from './dto/create-user.dto';
+import { Request, Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
+
+declare module 'express-session' {
+  interface SessionData {
+    initData?: string;
+  }
+}
 
 @Controller('users')
 export class UserController {
-  constructor(
-    private readonly service: UserService,
-    private readonly steamAuthService: SteamAuthService,
-  ) {}
+  constructor(private readonly service: UserService) {}
 
-  @Post('steam-login')
-  async steamLogin(@Body() steamLoginDto: SteamLoginDto, @Res() res: Response) {
-    try {
-      const result = await this.service.auth(steamLoginDto);
-
-      // Set JWT token as HTTP-only cookie
-      res.cookie('jwt_token', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure in production
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      });
-
-      return res.status(HttpStatus.OK).json({
-        success: true,
-        message: 'Steam login muvaffaqiyatli!',
-        user: result.user,
-      });
-    } catch (error) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        success: false,
-        message: error.message,
-      });
+  @Get('steam')
+  async steamLogin(@Query('initData') initData: string, @Res() res: Response) {
+    if (!initData) {
+      throw new UnauthorizedException('initData topilmadi');
     }
+
+    // Cookie sifatida saqlash
+    res.cookie('initData', initData, {
+      httpOnly: true,
+      secure: true, // HTTPS bo'lsa true
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 1000,
+    });
+    // Steam login flow'ni boshlash uchun redirect
+    res.redirect('/users/steam/redirect');
   }
 
-  @Post('steam-auth/initiate')
-  async initiateSteamAuth(
-    @Body() steamAuthDto: SteamAuthDto,
-    @Res() res: Response,
+  @Get('steam/redirect')
+  @UseGuards(AuthGuard('steam'))
+  async steamRedirect() {
+    // Passport avtomatik Steam login sahifasiga yo'naltiradi
+  }
+
+  @Get('steam/callback')
+  @UseGuards(AuthGuard('steam'))
+  async steamCallback(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    try {
-      const result = await this.steamAuthService.initiateSteamAuth(
-        steamAuthDto.telegram_id,
-        steamAuthDto.return_url,
-      );
-
-      return res.status(HttpStatus.OK).json({
-        success: true,
-        message: 'Steam authentication initiated',
-        data: result,
-      });
-    } catch (error) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        success: false,
-        message: error.message,
-      });
+    if (!req.user) {
+      throw new UnauthorizedException('Steam foydalanuvchisi aniqlanmadi');
     }
+    const { steamId, profile, initData } = req.user as any;
+    if (!initData) {
+      throw new UnauthorizedException('initData topilmadi');
+    }
+    const telegramId = this.service.validateInitData(initData);
+    if (!telegramId) {
+      throw new UnauthorizedException('initData tasdiqlanmadi');
+    }
+    await this.service.linkTelegramToSteam(telegramId, steamId, profile);
+    res.clearCookie('initData');
+    res.redirect(`https://t.me/cs2_skin_market_bot`);
   }
 
-  @Get('steam-auth/callback')
-  async handleSteamCallback(@Query() query: any, @Res() res: Response) {
-    try {
-      const result = await this.steamAuthService.handleSteamCallback(query);
-
-      // Set JWT token as HTTP-only cookie
-      res.cookie('jwt_token', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      });
-
-      // Redirect to frontend with success
-      const redirectUrl = new URL(
-        query.return_url || process.env.FRONTEND_URL || 'http://localhost:5173',
-      );
-      redirectUrl.searchParams.set('auth', 'success');
-      redirectUrl.searchParams.set('telegram_id', result.user.telegram_id);
-
-      return res.redirect(redirectUrl.toString());
-    } catch (error) {
-      // Redirect to frontend with error
-      const redirectUrl = new URL(
-        query.return_url || process.env.FRONTEND_URL || 'http://localhost:5173',
-      );
-      redirectUrl.searchParams.set('auth', 'error');
-      redirectUrl.searchParams.set('message', error.message);
-
-      return res.redirect(redirectUrl.toString());
-    }
+  @Get('telegram/:id')
+  async findByTelegramId(@Param('id') id: string) {
+    const user = await this.service.findByTelegramId(id);
+    return user;
   }
 }

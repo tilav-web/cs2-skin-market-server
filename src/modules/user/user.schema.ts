@@ -9,22 +9,22 @@ export class User {
   steam_id: string; // Steam foydalanuvchi ID si
 
   @Prop({ default: null })
-  phone: string; // Steam foydalanuvchi ID si
+  phone: string; // telefon raqami
+
+  @Prop({ default: null })
+  photo: string; // Steam foydalanuvchi photo si
 
   @Prop({ default: 0 })
   balance: number;
 
-  @Prop({ unique: true })
+  @Prop({ unique: true, sparse: true })
   telegram_id: string; // Telegram foydalanuvchi ID si
 
   @Prop({ default: null })
   personaname: string; // Steam foydalanuvchi nomi (UI uchun)
 
   @Prop({ default: null })
-  steam_token: string; // Steam autentifikatsiya tokeni
-
-  @Prop({ default: null })
-  token_expires_at: Date; // Token muddati
+  trade_url: string; // Steam autentifikatsiya tokeni
 
   @Prop({ default: null })
   action: string;
