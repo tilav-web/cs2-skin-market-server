@@ -23,7 +23,7 @@ export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
   ) {
     const steamId = identifier.match(/\d+$/)[0]; // 64-bit Steam ID
     const initData = req.cookies.initData;
-    
+
     if (!initData) {
       return done(new Error('strategy da initData topilmadi'), null);
     }

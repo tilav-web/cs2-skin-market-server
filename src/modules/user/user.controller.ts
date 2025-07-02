@@ -74,4 +74,18 @@ export class UserController {
     const user = await this.service.findByTelegramId(initData.telegram_id);
     return user;
   }
+
+  @Get('skins')
+  @UseGuards(TelegramInitDataGuard)
+  async getUserSkins(@Req() req: Request) {
+    const initData = req['initData'];
+    try {
+      const skins = await this.service.getUserSkins({
+        telegram_id: initData.telegram_id,
+      });
+      return skins;
+    } catch {
+      throw new UnauthorizedException('Failed to fetch skins');
+    }
+  }
 }
