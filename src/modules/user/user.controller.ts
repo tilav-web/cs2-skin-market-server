@@ -4,13 +4,13 @@ import {
   Req,
   Res,
   UnauthorizedException,
-  Param,
   UseGuards,
   Query,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
 
 declare module 'express-session' {
   interface SessionData {
@@ -67,9 +67,11 @@ export class UserController {
     res.redirect(`https://t.me/cs2_skin_market_bot`);
   }
 
-  @Get('telegram/:id')
-  async findByTelegramId(@Param('id') id: string) {
-    const user = await this.service.findByTelegramId(id);
+  @Get('find/me')
+  @UseGuards(TelegramInitDataGuard)
+  async findByTelegramId(@Req() req: Request) {
+    const initData = req['initData'];
+    const user = await this.service.findByTelegramId(initData.telegram_id);
     return user;
   }
 }
