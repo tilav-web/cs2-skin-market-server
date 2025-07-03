@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './user.schema';
 import { botToken } from 'src/utils/shared';
 import { createHmac } from 'crypto';
+import axios from 'axios';
 
 @Injectable()
 export class UserService {
@@ -63,5 +64,59 @@ export class UserService {
       .findOne({ telegram_id })
       .select('_id phone photo telegram_id balance personaname steam_id');
     return user;
+  }
+
+  async getUserSkins({ telegram_id }: { telegram_id: string }) {
+    const user = await this.model.findOne({ telegram_id });
+    if (!user || !user.steam_id) {
+      throw new UnauthorizedException('Foydalanuvchi yoki Steam ID topilmadi');
+    }
+
+    const url = `https://steamcommunity.com/inventory/${user.steam_id}/730/2`;
+    try {
+      const res = await axios.get(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Accept: 'application/json',
+        },
+      });
+
+      if (!res.data || !res.data.assets || !res.data.descriptions) {
+        throw new UnauthorizedException(
+          "Inventar yopiq yoki ma'lumot topilmadi",
+        );
+      }
+
+      const items = res.data.assets.map((asset: any) => {
+        const description = res.data.descriptions.find(
+          (desc: any) =>
+            desc.classid === asset.classid &&
+            desc.instanceid === asset.instanceid,
+        );
+
+        return {
+          assetid: asset.assetid,
+          classid: asset.classid,
+          instanceid: asset.instanceid,
+          market_hash_name:
+            description?.market_hash_name ||
+            description?.market_name ||
+            description?.name ||
+            '',
+          icon_url: description?.icon_url
+            ? `https://steamcommunity-a.akamaihd.net/economy/image/${description.icon_url}`
+            : '',
+          tradable: description?.tradable === 1, // <-- to‘g‘ri joy shu
+        };
+      });
+
+      return items;
+    } catch (error) {
+      console.error(error);
+      throw new UnauthorizedException(
+        "Inventarni olishda xatolik: Profil yopiq bo'lishi mumkin",
+      );
+    }
   }
 }
