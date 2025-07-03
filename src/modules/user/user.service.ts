@@ -5,10 +5,14 @@ import { User, UserDocument } from './user.schema';
 import { botToken } from 'src/utils/shared';
 import { createHmac } from 'crypto';
 import axios from 'axios';
+import { Skin, SkinDocument } from '../skin/skin.schema';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) public model: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) public model: Model<UserDocument>,
+    @InjectModel(Skin.name) private skinModel: Model<SkinDocument>,
+  ) {}
 
   validateInitData(initData: string): string | null {
     const secretKey = createHmac('sha256', 'WebAppData')
@@ -71,7 +75,8 @@ export class UserService {
     if (!user || !user.steam_id) {
       throw new UnauthorizedException('Foydalanuvchi yoki Steam ID topilmadi');
     }
-
+    let skins = await this.skinModel.find({ user: user._id });
+    if (skins.length > 0) return skins;
     const url = `https://steamcommunity.com/inventory/${user.steam_id}/730/2`;
     try {
       const res = await axios.get(url, {
@@ -81,20 +86,17 @@ export class UserService {
           Accept: 'application/json',
         },
       });
-
       if (!res.data || !res.data.assets || !res.data.descriptions) {
         throw new UnauthorizedException(
           "Inventar yopiq yoki ma'lumot topilmadi",
         );
       }
-
       const items = res.data.assets.map((asset: any) => {
         const description = res.data.descriptions.find(
           (desc: any) =>
             desc.classid === asset.classid &&
             desc.instanceid === asset.instanceid,
         );
-
         return {
           assetid: asset.assetid,
           classid: asset.classid,
@@ -107,11 +109,17 @@ export class UserService {
           icon_url: description?.icon_url
             ? `https://steamcommunity-a.akamaihd.net/economy/image/${description.icon_url}`
             : '',
-          tradable: description?.tradable === 1, // <-- to‘g‘ri joy shu
+          tradable: description?.tradable === 1,
+          price: 0,
+          user: user._id,
         };
       });
-
-      return items;
+      const tradableSkins = items.filter((item) => item.tradable);
+      if (tradableSkins.length > 0) {
+        await this.skinModel.insertMany(tradableSkins);
+      }
+      skins = await this.skinModel.find({ user: user._id });
+      return skins;
     } catch (error) {
       console.error(error);
       throw new UnauthorizedException(
