@@ -121,7 +121,7 @@ export class UserService {
       skins = await this.skinModel.find({ user: user._id });
       return skins;
     } catch (error) {
-      console.error(error);
+      console.error(error.message);
       throw new UnauthorizedException(
         "Inventarni olishda xatolik: Profil yopiq bo'lishi mumkin",
       );

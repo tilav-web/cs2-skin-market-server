@@ -56,4 +56,9 @@ export class SkinController {
     const telegram_id = req['initData'].telegram_id;
     return this.skinService.remove(id, telegram_id);
   }
+
+  @Get('advertising-pending')
+  async findAdvertisingPending() {
+    return this.skinService.findAdvertisingPending();
+  }
 }

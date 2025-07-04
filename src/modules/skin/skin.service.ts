@@ -61,4 +61,8 @@ export class SkinService {
     if (!deleted) throw new NotFoundException('Skin not found or not yours');
     return deleted;
   }
+
+  async findAdvertisingPending() {
+    return this.skinModel.find({ advertising: true, status: 'pending' });
+  }
 }

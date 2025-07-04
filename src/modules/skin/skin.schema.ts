@@ -43,6 +43,9 @@ export class Skin {
   buyer: MongooseSchema.Types.ObjectId; // Skinni sotib olgan foydalanuvchi (agar sotilgan bo‘lsa)
 
   @Prop({ default: null })
+  message_id: string; // telegram post taxrirlsh uchun
+
+  @Prop({ default: null })
   publish_at: Date; // Skinning reklama bo'limida joylashgan vaqti
 
   @Prop({ default: null })
