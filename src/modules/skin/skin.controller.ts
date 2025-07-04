@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { SkinService } from './skin.service';
@@ -30,6 +31,14 @@ export class SkinController {
   async findAll(@Req() req: Request) {
     const telegram_id = req['initData'].telegram_id;
     return this.skinService.findAllByUser(telegram_id);
+  }
+
+  @Get('advertising-pending')
+  async findAdvertisingPending(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    return this.skinService.findAdvertisingPending(Number(page), Number(limit));
   }
 
   @Get(':id')
@@ -55,10 +64,5 @@ export class SkinController {
   async remove(@Param('id') id: string, @Req() req: Request) {
     const telegram_id = req['initData'].telegram_id;
     return this.skinService.remove(id, telegram_id);
-  }
-
-  @Get('advertising-pending')
-  async findAdvertisingPending() {
-    return this.skinService.findAdvertisingPending();
   }
 }

@@ -62,7 +62,21 @@ export class SkinService {
     return deleted;
   }
 
-  async findAdvertisingPending() {
-    return this.skinModel.find({ advertising: true, status: 'pending' });
+  async findAdvertisingPending(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.skinModel
+        .find({ advertising: true, status: 'pending' })
+        .skip(skip)
+        .limit(limit),
+      this.skinModel.countDocuments({ advertising: true, status: 'pending' }),
+    ]);
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }
