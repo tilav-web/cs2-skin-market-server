@@ -79,4 +79,10 @@ export class SkinService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  async findOnePublicById(id: string) {
+    const skin = await this.skinModel.findById(id);
+    if (!skin) throw new NotFoundException('Skin not found');
+    return skin;
+  }
 }

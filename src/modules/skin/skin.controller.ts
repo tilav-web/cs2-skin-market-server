@@ -65,4 +65,9 @@ export class SkinController {
     const telegram_id = req['initData'].telegram_id;
     return this.skinService.remove(id, telegram_id);
   }
+
+  @Get('public/:id')
+  async findOnePublic(@Param('id') id: string) {
+    return this.skinService.findOnePublicById(id);
+  }
 }
