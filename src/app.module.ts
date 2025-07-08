@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PassportModule } from '@nestjs/passport';
 import { UserModule } from './modules/user/user.module';
 import { SkinModule } from './modules/skin/skin.module';
+import { BotModule } from './modules/bot/bot.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SkinModule } from './modules/skin/skin.module';
     ),
     UserModule,
     SkinModule,
+    BotModule,
   ],
   controllers: [],
   providers: [],

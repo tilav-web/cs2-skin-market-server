@@ -17,7 +17,7 @@ export class User {
   @Prop({ default: 0 })
   balance: number;
 
-  @Prop({ unique: true, sparse: true })
+  @Prop({ unique: true, sparse: true, required: false })
   telegram_id: string; // Telegram foydalanuvchi ID si
 
   @Prop({ default: null })
