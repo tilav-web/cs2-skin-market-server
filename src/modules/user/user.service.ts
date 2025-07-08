@@ -70,61 +70,83 @@ export class UserService {
     return user;
   }
 
-  async getUserSkins({ telegram_id }: { telegram_id: string }) {
+  async getUserSkins({
+    telegram_id,
+    refreshFromSteam = false,
+  }: {
+    telegram_id: string;
+    refreshFromSteam?: boolean;
+  }) {
     const user = await this.model.findOne({ telegram_id });
     if (!user || !user.steam_id) {
       throw new UnauthorizedException('Foydalanuvchi yoki Steam ID topilmadi');
     }
+
     let skins = await this.skinModel.find({ user: user._id });
-    if (skins.length > 0) return skins;
-    const url = `https://steamcommunity.com/inventory/${user.steam_id}/730/2`;
-    try {
-      const res = await axios.get(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Accept: 'application/json',
-        },
-      });
-      if (!res.data || !res.data.assets || !res.data.descriptions) {
+
+    // Agar refreshFromSteam true bo'lsa yoki bazada skinlar bo'lmasa, Steam'dan yangilaymiz
+    if (refreshFromSteam || skins.length === 0) {
+      const url = `https://steamcommunity.com/inventory/${user.steam_id}/730/2`;
+      try {
+        const res = await axios.get(url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Accept: 'application/json',
+          },
+        });
+        if (!res.data || !res.data.assets || !res.data.descriptions) {
+          throw new UnauthorizedException(
+            "Inventar yopiq yoki ma'lumot topilmadi",
+          );
+        }
+        const items = res.data.assets.map((asset: any) => {
+          const description = res.data.descriptions.find(
+            (desc: any) =>
+              desc.classid === asset.classid &&
+              desc.instanceid === asset.instanceid,
+          );
+          return {
+            assetid: asset.assetid,
+            classid: asset.classid,
+            instanceid: asset.instanceid,
+            market_hash_name:
+              description?.market_hash_name ||
+              description?.market_name ||
+              description?.name ||
+              '',
+            icon_url: description?.icon_url
+              ? `https://steamcommunity-a.akamaihd.net/economy/image/${description.icon_url}`
+              : '',
+            tradable: description?.tradable === 1,
+            price: 0,
+            user: user._id,
+          };
+        });
+        const tradableSkins = items.filter((item) => item.tradable);
+
+        // Bazadagi mavjud skinlarni topish
+        const existingSkinAssetIds = new Set(skins.map((s) => s.assetid));
+
+        // Yangi skinlarni aniqlash va bazaga qo'shish
+        const newSkins = tradableSkins.filter(
+          (skin) => !existingSkinAssetIds.has(skin.assetid),
+        );
+
+        if (newSkins.length > 0) {
+          await this.skinModel.insertMany(newSkins);
+        }
+
+        // Barcha skinlarni qayta yuklash (yangi qo'shilganlari bilan birga)
+        skins = await this.skinModel.find({ user: user._id });
+      } catch (error) {
+        console.error(error.message);
         throw new UnauthorizedException(
-          "Inventar yopiq yoki ma'lumot topilmadi",
+          "Inventarni olishda xatolik: Profil yopiq bo'lishi mumkin",
         );
       }
-      const items = res.data.assets.map((asset: any) => {
-        const description = res.data.descriptions.find(
-          (desc: any) =>
-            desc.classid === asset.classid &&
-            desc.instanceid === asset.instanceid,
-        );
-        return {
-          assetid: asset.assetid,
-          classid: asset.classid,
-          instanceid: asset.instanceid,
-          market_hash_name:
-            description?.market_hash_name ||
-            description?.market_name ||
-            description?.name ||
-            '',
-          icon_url: description?.icon_url
-            ? `https://steamcommunity-a.akamaihd.net/economy/image/${description.icon_url}`
-            : '',
-          tradable: description?.tradable === 1,
-          price: 0,
-          user: user._id,
-        };
-      });
-      const tradableSkins = items.filter((item) => item.tradable);
-      if (tradableSkins.length > 0) {
-        await this.skinModel.insertMany(tradableSkins);
-      }
-      skins = await this.skinModel.find({ user: user._id });
-      return skins;
-    } catch (error) {
-      console.error(error.message);
-      throw new UnauthorizedException(
-        "Inventarni olishda xatolik: Profil yopiq bo'lishi mumkin",
-      );
     }
+
+    return skins;
   }
 }

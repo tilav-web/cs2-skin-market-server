@@ -77,11 +77,13 @@ export class UserController {
 
   @Get('skins')
   @UseGuards(TelegramInitDataGuard)
-  async getUserSkins(@Req() req: Request) {
+  async getUserSkins(@Req() req: Request, @Query('refresh') refresh?: string) {
     const initData = req['initData'];
+    const refreshFromSteam = refresh === 'true';
     try {
       const skins = await this.service.getUserSkins({
         telegram_id: initData.telegram_id,
+        refreshFromSteam,
       });
       return skins;
     } catch {
