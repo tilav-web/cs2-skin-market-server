@@ -25,65 +25,72 @@ export class SkinService {
     const { price, advertising, advertising_hours, description } =
       createSkinDto;
 
-    // 1. Komissiya va reklama narxini hisoblash
+    // 1. Komissiyani hisoblash
     let commission_rate = price > 0 ? 0.05 : 0;
-    let advertising_cost = 0;
-
     if (advertising) {
-      if (!advertising_hours || advertising_hours <= 0) {
-        throw new BadRequestException(
-          'Advertising hours must be provided and positive.',
-        );
-      }
       commission_rate += 0.02;
-      advertising_cost = advertising_hours * 1000;
-
-      if (user.balance < advertising_cost) {
-        throw new BadRequestException('Insufficient balance for advertising.');
-      }
     }
 
-    // 2. publish_at va expires_at ni hisoblash
-    let publish_at = new Date();
+    // 2. Telegram reklamasini hisoblash va to'lovni amalga oshirish
+    let advertising_cost = 0;
+    let publish_at = null;
     let expires_at = null;
 
-    if (advertising) {
+    if (advertising_hours && advertising_hours > 0) {
+      advertising_cost = advertising_hours * 1000;
+
+      // Balans va cashbackni tekshirish
+      if (user.balance + user.cashback < advertising_cost) {
+        throw new BadRequestException(
+          "Reklama uchun mablag' yetarli emas (balans + cashback).",
+        );
+      }
+
+      // To'lovni amalga oshirish
+      let remaining_cost = advertising_cost;
+      const cashback_to_use = Math.min(user.cashback, remaining_cost);
+      user.cashback -= cashback_to_use;
+      remaining_cost -= cashback_to_use;
+
+      if (remaining_cost > 0) {
+        user.balance -= remaining_cost;
+      }
+      await user.save();
+
+      // publish_at va expires_at ni hisoblash
       const lastAdvertisedSkin = await this.skinModel
-        .findOne({ advertising: true, expires_at: { $ne: null } })
+        .findOne({ expires_at: { $ne: null } })
         .sort({ expires_at: -1 });
 
+      let next_publish_time = new Date();
       if (lastAdvertisedSkin && lastAdvertisedSkin.expires_at) {
-        publish_at = new Date(
+        next_publish_time = new Date(
           lastAdvertisedSkin.expires_at.getTime() + 2 * 60 * 1000,
         ); // 2 daqiqa qo'shamiz
       }
 
+      publish_at = next_publish_time;
       expires_at = new Date(
         publish_at.getTime() + advertising_hours * 60 * 60 * 1000,
       );
     }
 
-    // 3. Balansdan yechib olish va skinni yaratish
-    if (advertising_cost > 0) {
-      user.balance -= advertising_cost;
-      await user.save();
-    }
-
+    // 3. Skinni yaratish
     const createdSkin = new this.skinModel({
       ...createSkinDto,
       user: user._id,
       description,
       commission_rate,
       advertising_cost,
-      publish_at: advertising ? publish_at : null,
-      expires_at: advertising ? expires_at : null,
+      publish_at,
+      expires_at,
       status: 'available',
     });
 
     const savedSkin = await createdSkin.save();
 
-    // 4. Telegramga post qilish uchun vazifa qo'shish
-    if (savedSkin.advertising && savedSkin.publish_at) {
+    // 4. Telegramga post qilish uchun vazifa qo'shish (agar kerak bo'lsa)
+    if (savedSkin.publish_at) {
       const delay = savedSkin.publish_at.getTime() - Date.now();
       await this.telegramPublisherService.addPublishSkinJob(
         savedSkin,
@@ -188,5 +195,26 @@ export class SkinService {
     const skin = await this.skinModel.findById(id);
     if (!skin) throw new NotFoundException('Skin not found');
     return skin;
+  }
+
+  async findAdvertisedSkins(page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.skinModel
+        .find({ advertising: true, status: 'available' })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('user', 'personaname'),
+      this.skinModel.countDocuments({ advertising: true, status: 'available' }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

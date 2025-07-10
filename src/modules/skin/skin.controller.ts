@@ -41,6 +41,14 @@ export class SkinController {
     return this.skinService.findAdvertisingPending(Number(page), Number(limit));
   }
 
+  @Get('advertised')
+  async findAdvertisedSkins(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    return this.skinService.findAdvertisedSkins(Number(page), Number(limit));
+  }
+
   @Get(':id')
   @UseGuards(TelegramInitDataGuard)
   async findOne(@Param('id') id: string, @Req() req: Request) {
