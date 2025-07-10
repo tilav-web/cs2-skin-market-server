@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsNumber, IsOptional } from 'class-validator';
+import { IsString, IsBoolean, IsNumber, IsOptional, IsInt, Min } from 'class-validator';
 
 export class CreateSkinDto {
   @IsString()
@@ -22,19 +22,16 @@ export class CreateSkinDto {
   @IsNumber()
   price: number;
 
+  @IsString()
+  @IsOptional()
+  description?: string;
+
   @IsBoolean()
   @IsOptional()
   advertising?: boolean;
 
-  @IsString()
+  @IsInt()
+  @Min(0)
   @IsOptional()
-  status?: string;
-
-  @IsString()
-  @IsOptional()
-  publish_at?: string;
-
-  @IsString()
-  @IsOptional()
-  expires_at?: string;
+  advertising_hours?: number;
 }

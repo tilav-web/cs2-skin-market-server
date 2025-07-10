@@ -17,6 +17,9 @@ export class User {
   @Prop({ default: 0 })
   balance: number;
 
+  @Prop({ default: 0, min: 0 })
+  cashback: number; // Reklama va boshqa xizmatlar uchun cashback balansi
+
   @Prop({ unique: true, sparse: true, required: false })
   telegram_id: string; // Telegram foydalanuvchi ID si
 

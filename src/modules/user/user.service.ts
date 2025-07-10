@@ -123,13 +123,12 @@ export class UserService {
             user: user._id,
           };
         });
-        const tradableSkins = items.filter((item) => item.tradable);
 
         // Bazadagi mavjud skinlarni topish
         const existingSkinAssetIds = new Set(skins.map((s) => s.assetid));
 
         // Yangi skinlarni aniqlash va bazaga qo'shish
-        const newSkins = tradableSkins.filter(
+        const newSkins = items.filter(
           (skin) => !existingSkinAssetIds.has(skin.assetid),
         );
 

@@ -15,7 +15,10 @@ export enum TransactionType {
 @Schema({ timestamps: true })
 export class Transaction {
   @Prop({ required: true, ref: User.name })
-  user: Types.ObjectId;
+  owner: Types.ObjectId; // Kimning nomidan amalga oshirilgan
+
+  @Prop({ ref: User.name, default: null })
+  receiver: Types.ObjectId; // kimga sotilgan
 
   @Prop({ required: true })
   amount: number;
@@ -26,15 +29,11 @@ export class Transaction {
   @Prop({ default: 'pending', enum: ['pending', 'completed', 'failed'] })
   status: 'pending' | 'completed' | 'failed';
 
+  @Prop({ type: Types.ObjectId, ref: 'Skin', default: null }) // Skin modeliga murojaat
+  skin: Types.ObjectId;
+
   @Prop({ default: null })
-  skin: {
-    name: string;
-    wear: string;
-    image: string;
-    rarity: string;
-    statTrak: boolean;
-    weapon: string;
-  };
+  description: string; // Qo'shimcha ma'lumot yoki izoh
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
