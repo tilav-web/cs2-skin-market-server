@@ -18,7 +18,11 @@ export class SkinService {
     private readonly telegramPublisherService: TelegramPublisherService,
   ) {}
 
-  async listSkinForSale(skinId: string, dto: Partial<CreateSkinDto>, telegram_id: string) {
+  async listSkinForSale(
+    skinId: string,
+    dto: Partial<CreateSkinDto>,
+    telegram_id: string,
+  ) {
     const user = await this.userService.findByTelegramId(telegram_id);
     if (!user) throw new NotFoundException('User not found');
 
@@ -26,6 +30,13 @@ export class SkinService {
     if (!skin) throw new NotFoundException('Skin not found or not yours');
 
     const { price, advertising, advertising_hours, description } = dto;
+
+    // Narxi 0 bo'lgan skinni reklama qilishni cheklash
+    if (price === 0 && advertising) {
+      throw new BadRequestException(
+        "Narxi 0 bo'lgan skinni reklama qilish mumkin emas.",
+      );
+    }
 
     // 1. Komissiyani hisoblash
     let commission_rate = price > 0 ? 0.05 : 0;
