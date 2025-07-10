@@ -19,11 +19,15 @@ import { TelegramInitDataGuard } from '../user/guards/telegram-initdata.guard';
 export class SkinController {
   constructor(private readonly skinService: SkinService) {}
 
-  @Post()
+  @Post(':id/list-for-sale')
   @UseGuards(TelegramInitDataGuard)
-  async create(@Body() dto: CreateSkinDto, @Req() req: Request) {
+  async listForSale(
+    @Param('id') skinId: string,
+    @Body() dto: Partial<CreateSkinDto>,
+    @Req() req: Request,
+  ) {
     const telegram_id = req['initData'].telegram_id;
-    return this.skinService.create(dto, telegram_id);
+    return this.skinService.listSkinForSale(skinId, dto, telegram_id);
   }
 
   @Get()

@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Skin } from '../skin/skin.schema';
+import { Bot } from 'grammy'; // Bot ni import qilish
+import { ConfigService } from '@nestjs/config'; // ConfigService ni import qilish
 
 export interface PublishSkinJobData {
   skinId: string;
@@ -23,9 +25,18 @@ export interface DeleteSkinJobData {
 
 @Injectable()
 export class TelegramPublisherService {
+  private readonly bot: Bot; // Bot instansini qo'shish
+
   constructor(
     @InjectQueue('telegram-publisher') private readonly telegramQueue: Queue,
-  ) {}
+    private configService: ConfigService, // ConfigService ni inject qilish
+  ) {
+    const botToken = this.configService.get<string>('BOT_TOKEN');
+    if (!botToken) {
+      throw new Error('BOT_TOKEN is not defined in the configuration.');
+    }
+    this.bot = new Bot(botToken);
+  }
 
   async addPublishSkinJob(skin: Skin, delay: number) {
     const jobData: PublishSkinJobData = {
@@ -63,5 +74,20 @@ export class TelegramPublisherService {
       removeOnComplete: true,
       removeOnFail: false,
     });
+  }
+
+  async sendSkinListingToUser(telegramId: string, skin: Skin, publishAt: Date) {
+    const formattedPublishAt = publishAt
+      ? publishAt.toLocaleString('uz-UZ')
+      : 'Darhol';
+    const message = `Sizning skin ${skin.market_hash_name} sotuvga qo'yildi!\n\nNarxi: ${skin.price} tilav\nTavsif: ${skin.description || "Yo'q"}\nTelegram kanaliga joylash vaqti: ${formattedPublishAt}\n\nSizning skiningizni kuzatib boring!`;
+
+    try {
+      await this.bot.api.sendMessage(telegramId, message);
+    } catch (error) {
+      console.error(
+        `Foydalanuvchiga xabar yuborishda xatolik ${telegramId}: ${error.message}`,
+      );
+    }
   }
 }

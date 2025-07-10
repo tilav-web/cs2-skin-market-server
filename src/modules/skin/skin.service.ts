@@ -18,12 +18,14 @@ export class SkinService {
     private readonly telegramPublisherService: TelegramPublisherService,
   ) {}
 
-  async create(createSkinDto: CreateSkinDto, telegram_id: string) {
+  async listSkinForSale(skinId: string, dto: Partial<CreateSkinDto>, telegram_id: string) {
     const user = await this.userService.findByTelegramId(telegram_id);
     if (!user) throw new NotFoundException('User not found');
 
-    const { price, advertising, advertising_hours, description } =
-      createSkinDto;
+    const skin = await this.skinModel.findOne({ _id: skinId, user: user._id });
+    if (!skin) throw new NotFoundException('Skin not found or not yours');
+
+    const { price, advertising, advertising_hours, description } = dto;
 
     // 1. Komissiyani hisoblash
     let commission_rate = price > 0 ? 0.05 : 0;
@@ -40,7 +42,10 @@ export class SkinService {
       advertising_cost = advertising_hours * 1000;
 
       // Balans va cashbackni tekshirish
-      if (user.balance + user.cashback < advertising_cost) {
+      const currentBalance = user.balance ?? 0;
+      const currentCashback = user.cashback ?? 0;
+
+      if (currentBalance + currentCashback < advertising_cost) {
         throw new BadRequestException(
           "Reklama uchun mablag' yetarli emas (balans + cashback).",
         );
@@ -48,12 +53,12 @@ export class SkinService {
 
       // To'lovni amalga oshirish
       let remaining_cost = advertising_cost;
-      const cashback_to_use = Math.min(user.cashback, remaining_cost);
-      user.cashback -= cashback_to_use;
+      const cashback_to_use = Math.min(currentCashback, remaining_cost);
+      user.cashback = currentCashback - cashback_to_use;
       remaining_cost -= cashback_to_use;
 
       if (remaining_cost > 0) {
-        user.balance -= remaining_cost;
+        user.balance = currentBalance - remaining_cost;
       }
       await user.save();
 
@@ -75,19 +80,17 @@ export class SkinService {
       );
     }
 
-    // 3. Skinni yaratish
-    const createdSkin = new this.skinModel({
-      ...createSkinDto,
-      user: user._id,
-      description,
-      commission_rate,
-      advertising_cost,
-      publish_at,
-      expires_at,
-      status: 'available',
-    });
+    // Skinni yangilash
+    skin.price = price;
+    skin.description = description;
+    skin.advertising = advertising;
+    skin.commission_rate = commission_rate;
+    skin.advertising_cost = advertising_cost;
+    skin.publish_at = publish_at;
+    skin.expires_at = expires_at;
+    skin.status = 'available';
 
-    const savedSkin = await createdSkin.save();
+    const savedSkin = await skin.save();
 
     // 4. Telegramga post qilish uchun vazifa qo'shish (agar kerak bo'lsa)
     if (savedSkin.publish_at) {
@@ -97,6 +100,13 @@ export class SkinService {
         delay > 0 ? delay : 0,
       );
     }
+
+    // Foydalanuvchiga Telegram orqali xabar yuborish
+    await this.telegramPublisherService.sendSkinListingToUser(
+      telegram_id,
+      savedSkin,
+      savedSkin.publish_at,
+    );
 
     return savedSkin;
   }
