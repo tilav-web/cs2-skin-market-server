@@ -11,7 +11,7 @@ import { UserService } from '../user.service';
 export class TelegramInitDataGuard implements CanActivate {
   constructor(private readonly userService: UserService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const initData = request.headers['authorization'];
     if (!initData) {
@@ -23,7 +23,15 @@ export class TelegramInitDataGuard implements CanActivate {
     if (!telegramId) {
       throw new UnauthorizedException('Invalid initData');
     }
-    request['initData'] = { telegram_id: telegramId };
+
+    const user = await this.userService.findByTelegramId(telegramId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    request['user'] = user;
+    request['initData'] = { telegram_id: telegramId, user: user };
+
     return true;
   }
 }
