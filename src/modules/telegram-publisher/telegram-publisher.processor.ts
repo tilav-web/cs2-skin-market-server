@@ -1,7 +1,10 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
-import { PublishSkinJobData, UpdateSkinStatusJobData } from './telegram-publisher.service';
+import {
+  PublishSkinJobData,
+  UpdateSkinStatusJobData,
+} from './telegram-publisher.service';
 import { Bot } from 'grammy';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -12,6 +15,7 @@ import { Skin, SkinDocument } from '../skin/skin.schema';
 export class TelegramPublisherProcessor extends WorkerHost {
   private readonly logger = new Logger(TelegramPublisherProcessor.name);
   private readonly bot: Bot;
+  private readonly clientBaseUrl: string; // Yangi maydon
 
   constructor(
     private configService: ConfigService,
@@ -23,39 +27,76 @@ export class TelegramPublisherProcessor extends WorkerHost {
       throw new Error('BOT_TOKEN is not defined in the configuration.');
     }
     this.bot = new Bot(botToken);
+    this.clientBaseUrl = this.configService.get<string>('CLIENT_URL'); // CLIENT_URL ga o'zgartirildi
+    if (!this.clientBaseUrl) {
+      this.logger.error('CLIENT_URL is not defined in the configuration.');
+      throw new Error('CLIENT_URL is not defined in the configuration.');
+    }
   }
 
-  async process(job: Job<PublishSkinJobData | UpdateSkinStatusJobData>): Promise<any> {
+  async process(
+    job: Job<PublishSkinJobData | UpdateSkinStatusJobData>,
+  ): Promise<any> {
     this.logger.log(`Processing job ${job.name} with ID ${job.id}`);
+    console.log(`[DEBUG] Processor job data:`, job.data);
 
     if (job.name === 'publish-skin') {
       const data = job.data as PublishSkinJobData;
       try {
         const skin = await this.skinModel.findById(data.skinId);
         if (!skin) {
-          this.logger.warn(`Skin with ID ${data.skinId} not found for publishing.`);
+          this.logger.warn(
+            `Skin with ID ${data.skinId} not found for publishing.`,
+          );
           return;
         }
 
-        const message = await this.bot.api.sendPhoto(data.chatId, data.photoUrl, {
-          caption: data.caption,
-          parse_mode: 'HTML',
-        });
+        const message = await this.bot.api.sendPhoto(
+          data.chatId,
+          data.photoUrl,
+          {
+            caption: data.caption,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text:
+                      skin.price === 0
+                        ? 'TEKINGA OLING😊'
+                        : `${skin.price} so'm`,
+                    url: `${this.clientBaseUrl}/skins/buy/${data.skinId}`,
+                  },
+                ],
+              ],
+            },
+          },
+        );
         // message_id ni skin modeliga saqlash
-        skin.message_id = message.message_id.toString();
-        await skin.save();
-        this.logger.log(`Skin ${data.skinId} published to Telegram. Message ID: ${message.message_id}`);
+        await this.skinModel.findByIdAndUpdate(data.skinId, {
+          message_id: message.message_id.toString(),
+        });
+
+        this.logger.log(
+          `Skin ${data.skinId} published to Telegram. Message ID: ${message.message_id} saved.`,
+        );
         return message.message_id;
       } catch (error) {
-        this.logger.error(`Failed to publish skin ${data.skinId}: ${error.message}`);
+        this.logger.error(
+          `Failed to publish skin ${data.skinId}: ${error.message}`,
+        );
         throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
       }
     } else if (job.name === 'update-skin-status') {
       const data = job.data as UpdateSkinStatusJobData;
       try {
-        const skin = await this.skinModel.findById(data.skinId).populate('user');
+        const skin = await this.skinModel
+          .findById(data.skinId)
+          .populate('user');
         if (!skin) {
-          this.logger.warn(`Skin with ID ${data.skinId} not found for updating.`);
+          this.logger.warn(
+            `Skin with ID ${data.skinId} not found for updating.`,
+          );
           return;
         }
 
@@ -68,13 +109,21 @@ export class TelegramPublisherProcessor extends WorkerHost {
           newCaption = `Yangi skin sotuvda: ${skin.market_hash_name} - ${skin.price} tilav`;
         }
 
-        await this.bot.api.editMessageCaption(data.chatId, parseInt(data.messageId), {
-          caption: newCaption,
-          parse_mode: 'HTML',
-        });
-        this.logger.log(`Message ${data.messageId} caption updated in Telegram.`);
+        await this.bot.api.editMessageCaption(
+          data.chatId,
+          parseInt(data.messageId),
+          {
+            caption: newCaption,
+            parse_mode: 'HTML',
+          },
+        );
+        this.logger.log(
+          `Message ${data.messageId} caption updated in Telegram.`,
+        );
       } catch (error) {
-        this.logger.error(`Failed to update message ${data.messageId} caption: ${error.message}`);
+        this.logger.error(
+          `Failed to update message ${data.messageId} caption: ${error.message}`,
+        );
         throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
       }
     } else if (job.name === 'delete-skin') {
@@ -83,7 +132,9 @@ export class TelegramPublisherProcessor extends WorkerHost {
         await this.bot.api.deleteMessage(data.chatId, parseInt(data.messageId));
         this.logger.log(`Message ${data.messageId} deleted from Telegram.`);
       } catch (error) {
-        this.logger.error(`Failed to delete message ${data.messageId}: ${error.message}`);
+        this.logger.error(
+          `Failed to delete message ${data.messageId}: ${error.message}`,
+        );
         throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
       }
     }
@@ -96,6 +147,8 @@ export class TelegramPublisherProcessor extends WorkerHost {
 
   @OnWorkerEvent('failed')
   onFailed(job: Job, err: Error) {
-    this.logger.error(`Job ${job.id} of type ${job.name} failed: ${err.message}`);
+    this.logger.error(
+      `Job ${job.id} of type ${job.name} failed: ${err.message}`,
+    );
   }
 }

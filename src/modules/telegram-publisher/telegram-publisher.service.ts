@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Skin } from '../skin/skin.schema';
-import { Bot } from 'grammy'; // Bot ni import qilish
-import { ConfigService } from '@nestjs/config'; // ConfigService ni import qilish
+import { SkinDocument } from '../skin/skin.schema';
+import { Bot } from 'grammy';
+import { ConfigService } from '@nestjs/config';
 
 export interface PublishSkinJobData {
   skinId: string;
@@ -25,11 +25,11 @@ export interface DeleteSkinJobData {
 
 @Injectable()
 export class TelegramPublisherService {
-  private readonly bot: Bot; // Bot instansini qo'shish
+  private readonly bot: Bot;
 
   constructor(
     @InjectQueue('telegram-publisher') private readonly telegramQueue: Queue,
-    private configService: ConfigService, // ConfigService ni inject qilish
+    private configService: ConfigService,
   ) {
     const botToken = this.configService.get<string>('BOT_TOKEN');
     if (!botToken) {
@@ -38,21 +38,58 @@ export class TelegramPublisherService {
     this.bot = new Bot(botToken);
   }
 
-  async addPublishSkinJob(skin: Skin, delay: number) {
+  async addPublishSkinJob(skin: SkinDocument, delay: number) {
+    console.log(
+      `[DEBUG] addPublishSkinJob qabul qilindi. Skin ID: ${skin._id}, Delay: ${delay}ms`,
+    );
+    const generateSkinPostHTML = (skin: SkinDocument): string => {
+      const isFree = skin.price === 0;
+      const tradeStatus = skin.tradable
+        ? '✅ Trade mumkin'
+        : '❌ Trade mumkin emas';
+      const skinName = skin.market_hash_name;
+      const description = skin.description?.trim();
+
+      const priceBlock = isFree
+        ? ' <b>BEPUL! Faqat birinchi foydalanuvchi uchun!</b>'
+        : `<b>${skin.price} so'm</b>`;
+
+      const descriptionBlock =
+        isFree && description
+          ? `
+<b> Tavsif (Muallifdan):</b>
+<i>${description}</i>`
+          : description && !isFree
+            ? `
+ ${description}`
+            : '';
+
+      return `
+<b> Skin nomi:</b> ${skinName}
+<b> Narxi:</b> ${priceBlock}
+<b>♻️ Holati:</b> ${skin.status}
+<b> Trade:</b> ${tradeStatus}
+${descriptionBlock}
+
+ <i>Skinni ${isFree ? 'olish' : 'sotib olish'} uchun pastdagi tugmadan foydalaning</i>
+`;
+    };
+
     const jobData: PublishSkinJobData = {
       skinId: skin._id.toString(),
-      chatId: process.env.TELEGRAM_CHANNEL_ID || '', // .env dan oling
-      caption: `Yangi skin sotuvda: ${skin.market_hash_name} - ${skin.price} tilav`, // Misol matn
+      chatId: process.env.TELEGRAM_CHANNEL_ID || '',
+      caption: generateSkinPostHTML(skin), // HTML formatidagi caption
       photoUrl: skin.icon_url,
     };
     await this.telegramQueue.add('publish-skin', jobData, {
-      delay: delay, // Millisekundlarda
+      delay: delay,
       removeOnComplete: true,
       removeOnFail: false,
     });
+    console.log(`[DEBUG] Job 'publish-skin' navbatga qo'shildi.`);
   }
 
-  async addUpdateSkinStatusJob(skin: Skin) {
+  async addUpdateSkinStatusJob(skin: SkinDocument) {
     const jobData: UpdateSkinStatusJobData = {
       skinId: skin._id.toString(),
       messageId: skin.message_id,
@@ -76,14 +113,59 @@ export class TelegramPublisherService {
     });
   }
 
-  async sendSkinListingToUser(telegramId: string, skin: Skin, publishAt: Date) {
+  async sendSkinListingToUser(
+    telegramId: string,
+    skin: SkinDocument,
+    publishAt: Date,
+  ) {
     const formattedPublishAt = publishAt
       ? publishAt.toLocaleString('uz-UZ')
       : 'Darhol';
-    const message = `Sizning skin ${skin.market_hash_name} sotuvga qo'yildi!\n\nNarxi: ${skin.price} tilav\nTavsif: ${skin.description || "Yo'q"}\nTelegram kanaliga joylash vaqti: ${formattedPublishAt}\n\nSizning skiningizni kuzatib boring!`;
+
+    const generateSkinPostHTML = (skin: SkinDocument): string => {
+      const isFree = skin.price === 0;
+      const tradeStatus = skin.tradable
+        ? '✅ Trade mumkin'
+        : '❌ Trade mumkin emas';
+      const skinName = skin.market_hash_name;
+      const description = skin.description?.trim();
+
+      const priceBlock = isFree
+        ? ' <b>BEPUL! Faqat birinchi foydalanuvchi uchun!</b>'
+        : `<b>${skin.price} so'm</b>`;
+
+      const descriptionBlock =
+        isFree && description
+          ? `
+<b> Tavsif (Muallifdan):</b>
+<i>${description}</i>`
+          : description && !isFree
+            ? `
+ ${description}`
+            : '';
+
+      return `
+<b> Skin nomi:</b> ${skinName}
+<b> Narxi:</b> ${priceBlock}
+<b>♻️ Holati:</b> ${skin.status}
+<b> Trade:</b> ${tradeStatus}
+${descriptionBlock}
+`; // Tugma va oxirgi matnni olib tashladik
+    };
+
+    const baseMessage = generateSkinPostHTML(skin);
+
+    const message = `${baseMessage}
+
+Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
+
+<i>Sizning skiningizni kuzatib boring!</i>`;
 
     try {
-      await this.bot.api.sendMessage(telegramId, message);
+      await this.bot.api.sendPhoto(telegramId, skin.icon_url, {
+        caption: message,
+        parse_mode: 'HTML',
+      });
     } catch (error) {
       console.error(
         `Foydalanuvchiga xabar yuborishda xatolik ${telegramId}: ${error.message}`,

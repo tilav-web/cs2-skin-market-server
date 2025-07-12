@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose'; // Types ni import qilish
 import { Skin, SkinDocument } from './skin.schema';
 import { CreateSkinDto } from './dto/create-skin.dto';
 import { UserService } from '../user/user.service';
@@ -26,10 +26,37 @@ export class SkinService {
     const user = await this.userService.findByTelegramId(telegram_id);
     if (!user) throw new NotFoundException('User not found');
 
-    const skin = await this.skinModel.findOne({ _id: skinId, user: user._id });
-    if (!skin) throw new NotFoundException('Skin not found or not yours');
+    let objectIdSkinId: Types.ObjectId;
+    try {
+      objectIdSkinId = new Types.ObjectId(skinId);
+    } catch {
+      throw new BadRequestException('Invalid Skin ID format');
+    }
 
+    // user._id ni ham ObjectId ga o'tkazib qidiramiz
+    let objectIdUserId: Types.ObjectId;
+    try {
+      objectIdUserId = new Types.ObjectId(user._id.toString()); // user._id ni stringga o'tkazamiz
+    } catch {
+      throw new BadRequestException('Invalid User ID format');
+    }
+
+    // DTO dan qiymatlarni ajratib olish
     const { price, advertising, advertising_hours, description } = dto;
+
+    // Sotuvga qo'yishdan oldin skin holatini tekshirish
+    const existingSkin = await this.skinModel.findOne({
+      _id: objectIdSkinId,
+      user: objectIdUserId,
+    });
+    if (!existingSkin) {
+      throw new NotFoundException('Skin not found or not yours');
+    }
+    if (existingSkin.status === 'pending') {
+      throw new BadRequestException(
+        "Bu skin allaqachon sotuvga qo'yilgan va navbatda turibdi.",
+      );
+    }
 
     // Narxi 0 bo'lgan skinni reklama qilishni cheklash
     if (price === 0 && advertising) {
@@ -46,11 +73,36 @@ export class SkinService {
 
     // 2. Telegram reklamasini hisoblash va to'lovni amalga oshirish
     let advertising_cost = 0;
-    let publish_at = null;
-    let expires_at = null;
+    let publish_at: Date | null = null;
+    let expires_at: Date | null = null;
 
+    // publish_at ni hisoblash
+    const lastAdvertisedSkin = await this.skinModel
+      .findOne({ expires_at: { $ne: null } })
+      .sort({ expires_at: -1 });
+
+    let next_publish_time = new Date(Date.now() + 2 * 60 * 1000); // Default: hozirgi vaqtdan 2 daqiqa keyin
+
+    if (lastAdvertisedSkin && lastAdvertisedSkin.expires_at) {
+      // Agar oxirgi reklama vaqti hozirgi vaqtdan o'tib ketgan bo'lsa, yangi vaqtni hozirgidan 2 daqiqa keyinga belgilaymiz
+      if (lastAdvertisedSkin.expires_at.getTime() < Date.now()) {
+        next_publish_time = new Date(Date.now() + 2 * 60 * 1000);
+      } else {
+        // Aks holda, oxirgi reklama vaqtidan 2 daqiqa keyinga belgilaymiz
+        next_publish_time = new Date(
+          lastAdvertisedSkin.expires_at.getTime() + 2 * 60 * 1000,
+        );
+      }
+    }
+
+    publish_at = next_publish_time;
+
+    // expires_at ni hisoblash
     if (advertising_hours && advertising_hours > 0) {
       advertising_cost = advertising_hours * 1000;
+      expires_at = new Date(
+        publish_at.getTime() + advertising_hours * 60 * 60 * 1000,
+      );
 
       // Balans va cashbackni tekshirish
       const currentBalance = user.balance ?? 0;
@@ -72,42 +124,45 @@ export class SkinService {
         user.balance = currentBalance - remaining_cost;
       }
       await user.save();
-
-      // publish_at va expires_at ni hisoblash
-      const lastAdvertisedSkin = await this.skinModel
-        .findOne({ expires_at: { $ne: null } })
-        .sort({ expires_at: -1 });
-
-      let next_publish_time = new Date();
-      if (lastAdvertisedSkin && lastAdvertisedSkin.expires_at) {
-        next_publish_time = new Date(
-          lastAdvertisedSkin.expires_at.getTime() + 2 * 60 * 1000,
-        ); // 2 daqiqa qo'shamiz
-      }
-
-      publish_at = next_publish_time;
-      expires_at = new Date(
-        publish_at.getTime() + advertising_hours * 60 * 60 * 1000,
-      );
+    } else {
+      // Agar advertising_hours 0 bo'lsa, expires_at ni publish_at dan 2 daqiqa keyinga belgilaymiz
+      expires_at = new Date(publish_at.getTime() + 2 * 60 * 1000);
     }
 
-    // Skinni yangilash
-    skin.price = price;
-    skin.description = description;
-    skin.advertising = advertising;
-    skin.commission_rate = commission_rate;
-    skin.advertising_cost = advertising_cost;
-    skin.publish_at = publish_at;
-    skin.expires_at = expires_at;
-    skin.status = 'available';
+    // --- DEBUG LOGS BEFORE UPDATE ---
+    console.log('--- DEBUG: Values before findOneAndUpdate ---');
+    console.log('price:', price);
+    console.log('description:', description);
+    console.log('advertising:', advertising);
+    console.log('commission_rate:', commission_rate);
+    console.log('advertising_cost:', advertising_cost);
+    console.log('publish_at:', publish_at);
+    console.log('expires_at:', expires_at);
+    console.log('status (to be set):', 'pending');
+    console.log('------------------------------------------');
 
-    const savedSkin = await skin.save();
+    const skin = await this.skinModel.findOneAndUpdate(
+      { _id: objectIdSkinId, user: objectIdUserId },
+      {
+        price,
+        description,
+        advertising,
+        commission_rate,
+        advertising_cost,
+        publish_at,
+        expires_at,
+        status: 'pending', // Changed from 'available' to 'pending'
+      },
+      { new: true }, // Yangilangan dokumentni qaytarish uchun
+    );
+
+    if (!skin) throw new NotFoundException('Skin not found or not yours');
 
     // 4. Telegramga post qilish uchun vazifa qo'shish (agar kerak bo'lsa)
-    if (savedSkin.publish_at) {
-      const delay = savedSkin.publish_at.getTime() - Date.now();
+    if (skin.publish_at) {
+      const delay = skin.publish_at.getTime() - Date.now();
       await this.telegramPublisherService.addPublishSkinJob(
-        savedSkin,
+        skin,
         delay > 0 ? delay : 0,
       );
     }
@@ -115,11 +170,11 @@ export class SkinService {
     // Foydalanuvchiga Telegram orqali xabar yuborish
     await this.telegramPublisherService.sendSkinListingToUser(
       telegram_id,
-      savedSkin,
-      savedSkin.publish_at,
+      skin,
+      skin.publish_at,
     );
 
-    return savedSkin;
+    return skin;
   }
 
   async findAllByUser(telegram_id: string) {

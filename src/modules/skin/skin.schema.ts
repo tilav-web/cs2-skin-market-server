@@ -6,9 +6,6 @@ export type SkinDocument = Skin & Document;
 
 @Schema({ timestamps: true })
 export class Skin {
-  @Prop({ type: String })
-  _id?: string;
-
   @Prop({ required: true, unique: true })
   assetid: string; // Skinning noyob ID'si (trade qilish uchun kerak)
 
@@ -54,7 +51,7 @@ export class Skin {
   @Prop({ default: 0 })
   advertising_cost: number; // Reklama uchun to'langan summa
 
-  @Prop({ default: 0.03 })
+  @Prop({ default: 0.05 })
   commission_rate: number; // Skin sotish uchun komissiya foizi
 
   @Prop({ default: 0 })

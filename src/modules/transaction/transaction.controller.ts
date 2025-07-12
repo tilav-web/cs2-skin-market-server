@@ -40,4 +40,33 @@ export class TransactionController {
     const initData = req['initData'];
     return this.transactionService.findUserTransactions(initData.telegram_id);
   }
+
+  @UseGuards(TelegramInitDataGuard) 
+  @Post('deposit/initiate')
+  async initiateDeposit(
+    @Req() req: Request,
+    @Body('amount') amount: number,
+  ) {
+    const userId = req['initData'].user.id;
+    const transaction = await this.transactionService.initiateDeposit(
+      userId,
+      amount,
+    );
+
+    const CLICK_SERVICE_ID = process.env.CLICK_SERVICE_ID;
+    const CLICK_MERCHANT_ID = process.env.CLICK_MERCHANT_ID;
+    const return_url = 'https://t.me/your_bot_name';
+
+    const params = new URLSearchParams({
+        service_id: CLICK_SERVICE_ID,
+        merchant_id: CLICK_MERCHANT_ID,
+        amount: transaction.amount.toString(),
+        transaction_param: transaction._id.toString(),
+        return_url: return_url
+    }).toString();
+
+    return {
+        url: `https://my.click.uz/services/pay?${params}`
+    };
+  }
 }

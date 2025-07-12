@@ -100,4 +100,28 @@ export class TransactionService {
       .sort({ createdAt: -1 })
       .exec();
   }
+
+  async findById(id: string): Promise<TransactionDocument> {
+    return this.transactionModel.findById(id).exec();
+  }
+
+  async updateStatus(id: string, status: 'pending' | 'completed' | 'failed'): Promise<TransactionDocument> {
+    return this.transactionModel.findByIdAndUpdate(id, { status }, { new: true }).exec();
+  }
+
+  async initiateDeposit(
+    ownerId: string,
+    amount: number,
+  ): Promise<TransactionDocument> {
+    if (amount <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+    const newTransaction = new this.transactionModel({
+      owner: ownerId,
+      amount,
+      type: 'deposit',
+      status: 'pending',
+    });
+    return newTransaction.save();
+  }
 }

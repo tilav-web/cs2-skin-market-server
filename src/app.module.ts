@@ -7,6 +7,7 @@ import { SkinModule } from './modules/skin/skin.module';
 import { BotModule } from './modules/bot/bot.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { TelegramPublisherModule } from './modules/telegram-publisher/telegram-publisher.module';
+import { ClickModule } from './modules/click/click.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TelegramPublisherModule } from './modules/telegram-publisher/telegram-p
     BotModule,
     TransactionModule,
     TelegramPublisherModule,
+    ClickModule,
   ],
   controllers: [],
   providers: [],

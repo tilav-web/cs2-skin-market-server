@@ -148,4 +148,8 @@ export class UserService {
 
     return skins;
   }
+
+  async updateBalance(userId: string, amount: number): Promise<void> {
+    await this.model.updateOne({ _id: userId }, { $inc: { balance: amount } });
+  }
 }
