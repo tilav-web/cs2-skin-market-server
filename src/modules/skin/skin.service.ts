@@ -321,9 +321,11 @@ export class SkinService {
 
     // Delete message from Telegram if it was published
     if (skin.message_id && process.env.TELEGRAM_CHANNEL_ID) {
-      await this.telegramPublisherService.deleteMessage(
+      const newCaption = `<b>Skin sotuvdan olib tashlandi!</b>\n\n${skin.market_hash_name}`;
+      await this.telegramPublisherService.editMessageText(
         process.env.TELEGRAM_CHANNEL_ID,
         skin.message_id,
+        newCaption,
       );
     }
 

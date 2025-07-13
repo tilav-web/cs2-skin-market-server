@@ -182,4 +182,17 @@ Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
       );
     }
   }
+
+  async editMessageText(chatId: string, messageId: string, text: string) {
+    try {
+      await this.bot.api.editMessageText(chatId, Number(messageId), text, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [] }, // Inline tugmalarni olib tashlash
+      });
+    } catch (error) {
+      console.error(
+        `Telegram xabarini tahrirlashda xatolik ${messageId}: ${error.message}`,
+      );
+    }
+  }
 }
