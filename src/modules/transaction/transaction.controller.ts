@@ -29,17 +29,17 @@ export class TransactionController {
     return this.transactionService.findAll();
   }
 
-  @Get(':id')
-  @UseGuards(TelegramInitDataGuard)
-  findOne(@Param('id') id: string) {
-    return this.transactionService.findOne(id);
-  }
-
   @Get('my') // Foydalanuvchining o'z tranzaksiyalari uchun yangi endpoint
   @UseGuards(TelegramInitDataGuard)
   findMyTransactions(@Req() req: Request) {
     const initData = req['initData'];
     return this.transactionService.findUserTransactions(initData.telegram_id);
+  }
+
+  @Get(':id')
+  @UseGuards(TelegramInitDataGuard)
+  findOne(@Param('id') id: string) {
+    return this.transactionService.findOne(id);
   }
 
   @UseGuards(TelegramInitDataGuard)

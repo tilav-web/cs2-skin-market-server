@@ -1,4 +1,10 @@
-import { IsMongoId, IsNumber, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  IsMongoId,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { TransactionType } from '../transaction.schema';
 
 export class CreateTransactionDto {

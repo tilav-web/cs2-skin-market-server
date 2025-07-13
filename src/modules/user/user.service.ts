@@ -70,6 +70,10 @@ export class UserService {
     return user;
   }
 
+  async findById(id: string): Promise<UserDocument> {
+    return this.model.findById(id).exec();
+  }
+
   async getUserSkins({
     telegram_id,
     refreshFromSteam = false,

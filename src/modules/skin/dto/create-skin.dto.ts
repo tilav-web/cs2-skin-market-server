@@ -1,4 +1,11 @@
-import { IsString, IsBoolean, IsNumber, IsOptional, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class CreateSkinDto {
   @IsString()

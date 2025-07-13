@@ -1,4 +1,15 @@
-import { IsIn, IsNotEmpty, IsNumberString, IsOptional, IsString } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumberString,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+
+export enum ClickAction {
+  PREPARE = '0',
+  COMPLETE = '1',
+}
 
 export class ClickDto {
   @IsNumberString()
@@ -11,8 +22,6 @@ export class ClickDto {
 
   @IsNumberString()
   @IsNotEmpty()
-  click_paydoc_id: string;
-
   @IsString()
   @IsNotEmpty()
   merchant_trans_id: string;
@@ -21,9 +30,9 @@ export class ClickDto {
   @IsNotEmpty()
   amount: string;
 
-  @IsIn(['0', '1'])
+  @IsIn([ClickAction.PREPARE, ClickAction.COMPLETE])
   @IsNotEmpty()
-  action: string;
+  action: ClickAction;
 
   @IsNumberString()
   @IsNotEmpty()

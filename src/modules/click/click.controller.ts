@@ -1,21 +1,28 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { ClickService } from './click.service';
-import { ClickDto } from './dto/click.dto';
+import { ClickDto, ClickAction } from './dto/click.dto';
+import { TelegramInitDataGuard } from '../user/guards/telegram-initdata.guard';
+import { CLICK_ERRORS } from './click.constants';
 
 @Controller('click')
 export class ClickController {
   constructor(private readonly clickService: ClickService) {}
 
+  @UseGuards(TelegramInitDataGuard)
+  @Post('create-payment')
+  async createPayment(@Req() req, @Body('amount') amount: number) {
+    const userId = req.user.id;
+    return this.clickService.createPayment(userId, amount);
+  }
+
   @Post('transaction')
   async handleTransaction(@Body() clickDto: ClickDto) {
-    console.log('CLICK CONTROLLER: Request received', clickDto);
-    if (clickDto.action === '0') {
+    if (clickDto.action === ClickAction.PREPARE) {
       return this.clickService.prepare(clickDto);
     }
-    if (clickDto.action === '1') {
+    if (clickDto.action === ClickAction.COMPLETE) {
       return this.clickService.complete(clickDto);
     }
-    // Agar action 0 yoki 1 bo'lmasa, xato qaytarish
-    return { error: -3, error_note: 'Action not found' };
+    return CLICK_ERRORS.ACTION_NOT_FOUND;
   }
 }

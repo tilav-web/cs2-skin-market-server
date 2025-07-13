@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Transaction, TransactionDocument } from './transaction.schema';
@@ -10,7 +14,8 @@ import { TelegramPublisherService } from '../telegram-publisher/telegram-publish
 @Injectable()
 export class TransactionService {
   constructor(
-    @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Skin.name) private skinModel: Model<SkinDocument>,
     private readonly telegramPublisherService: TelegramPublisherService,
@@ -21,34 +26,27 @@ export class TransactionService {
     if (!buyer) {
       throw new NotFoundException('Buyer not found');
     }
-
     const skin = await this.skinModel.findById(skinId).populate('user');
     if (!skin) {
       throw new NotFoundException('Skin not found');
     }
-
     if (skin.status !== 'available') {
       throw new BadRequestException('Skin is not available for sale');
     }
-
     if (buyer.balance < skin.price) {
       throw new BadRequestException('Insufficient balance');
     }
-
     const seller = skin.user as UserDocument;
     const commissionAmount = skin.price * skin.commission_rate;
     const sellerRevenue = skin.price - commissionAmount;
-
     // Update balances
     buyer.balance -= skin.price;
     seller.balance += sellerRevenue;
-
     // Update skin
     skin.status = 'sold';
-    skin.buyer = buyer; // buyer obyektini to'g'ridan-to'g'ri beramiz
+    skin.buyer = buyer;
     skin.commission_amount = commissionAmount;
     skin.seller_revenue = sellerRevenue;
-
     // Create transaction
     const transaction = new this.transactionModel({
       type: 'sale',
@@ -57,25 +55,25 @@ export class TransactionService {
       owner: seller._id,
       receiver: buyer._id,
     });
-
     // Save everything in a session for atomicity (optional but recommended)
     await buyer.save();
     await seller.save();
     await skin.save();
     const savedTransaction = await transaction.save();
-
     // Update Telegram post
     if (skin.message_id) {
       await this.telegramPublisherService.addUpdateSkinStatusJob(skin);
     }
-
     return savedTransaction;
   }
 
   async create(
     createTransactionDto: CreateTransactionDto,
-  ): Promise<Transaction> {
-    const createdTransaction = new this.transactionModel(createTransactionDto);
+  ): Promise<TransactionDocument> {
+    const createdTransaction = new this.transactionModel({
+      ...createTransactionDto,
+      status: 'pending',
+    });
     return createdTransaction.save();
   }
 
@@ -102,11 +100,18 @@ export class TransactionService {
   }
 
   async findById(id: string): Promise<TransactionDocument> {
+    // Transactionni faqat mavjud bo'lsa qaytaradi, aks holda null
     return this.transactionModel.findById(id).exec();
   }
 
-  async updateStatus(id: string, status: 'pending' | 'completed' | 'failed'): Promise<TransactionDocument> {
-    return this.transactionModel.findByIdAndUpdate(id, { status }, { new: true }).exec();
+  async updateStatus(
+    id: string,
+    status: 'pending' | 'completed' | 'failed',
+  ): Promise<TransactionDocument> {
+    // Transaction statusini yangilaydi va yangilangan obyektni qaytaradi
+    return this.transactionModel
+      .findByIdAndUpdate(id, { status }, { new: true })
+      .exec();
   }
 
   async initiateDeposit(
