@@ -185,9 +185,13 @@ Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
 
   async editMessageText(chatId: string, messageId: string, text: string) {
     try {
+      // Matnni tahrirlash
       await this.bot.api.editMessageText(chatId, Number(messageId), text, {
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [] }, // Inline tugmalarni olib tashlash
+      });
+      // Inline tugmalarni olib tashlash
+      await this.bot.api.editMessageReplyMarkup(chatId, Number(messageId), {
+        reply_markup: { inline_keyboard: [] },
       });
     } catch (error) {
       console.error(
