@@ -172,4 +172,14 @@ Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
       );
     }
   }
+
+  async deleteMessage(chatId: string, messageId: string) {
+    try {
+      await this.bot.api.deleteMessage(chatId, Number(messageId));
+    } catch (error) {
+      console.error(
+        `Telegram xabarini o'chirishda xatolik ${messageId}: ${error.message}`,
+      );
+    }
+  }
 }

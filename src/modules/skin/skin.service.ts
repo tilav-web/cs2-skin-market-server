@@ -293,4 +293,40 @@ export class SkinService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  async cancelSale(skinId: string, telegram_id: string) {
+    const user = await this.userService.findByTelegramId(telegram_id);
+    if (!user) throw new NotFoundException('User not found');
+
+    const skin = await this.skinModel.findOne({
+      _id: skinId,
+      user: user._id,
+    });
+
+    if (!skin) {
+      throw new NotFoundException('Skin not found or not yours');
+    }
+
+    if (skin.status !== 'pending') {
+      throw new BadRequestException('Skin is not in pending status.');
+    }
+
+    // Update skin status and reset advertising fields
+    skin.status = 'available';
+    skin.advertising = false;
+    skin.message_id = null;
+    skin.publish_at = null;
+    skin.expires_at = null;
+    await skin.save();
+
+    // Delete message from Telegram if it was published
+    if (skin.message_id && process.env.TELEGRAM_CHANNEL_ID) {
+      await this.telegramPublisherService.deleteMessage(
+        process.env.TELEGRAM_CHANNEL_ID,
+        skin.message_id,
+      );
+    }
+
+    return skin;
+  }
 }

@@ -82,4 +82,11 @@ export class SkinController {
   async findOnePublic(@Param('id') id: string) {
     return this.skinService.findOnePublicById(id);
   }
+
+  @Patch(':id/cancel-sale')
+  @UseGuards(TelegramInitDataGuard)
+  async cancelSale(@Param('id') skinId: string, @Req() req: Request) {
+    const telegram_id = req['initData'].telegram_id;
+    return this.skinService.cancelSale(skinId, telegram_id);
+  }
 }
