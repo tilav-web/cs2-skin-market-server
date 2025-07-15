@@ -1,143 +1,211 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
-import { TransactionService } from '../transaction/transaction.service';
-import { UserService } from '../user/user.service';
-import { ClickDto, ClickAction } from './dto/click.dto';
-import { TransactionType } from '../transaction/transaction.schema';
-import { CLICK_ERRORS } from './click.constants';
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ClickError, ClickAction, TransactionState } from './click.constants';
+import clickCheckToken from '../../utils/click-check';
+import {
+  Transaction,
+  TransactionDocument,
+  TransactionType,
+} from '../transaction/transaction.schema';
+import { User, UserDocument } from '../user/user.schema';
 
 @Injectable()
 export class ClickService {
   constructor(
-    private readonly transactionService: TransactionService,
-    private readonly userService: UserService,
-    private readonly configService: ConfigService,
+    @InjectModel(Transaction.name)
+    private transactionModel: Model<TransactionDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {}
 
-  async createPayment(userId: string, amount: number) {
-    const user = await this.userService.findById(userId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    const transaction = await this.transactionService.create({
-      owner: userId,
-      amount,
-      type: TransactionType.DEPOSIT,
-    });
-    const serviceId = this.configService.get('CLICK_SERVICE_ID');
-    const merchantId = this.configService.get('CLICK_MERCHANT_ID');
-    const transactionId = transaction._id.toString();
-    const url = `https://my.click.uz/services/pay?service_id=${serviceId}&merchant_id=${merchantId}&amount=${amount}&transaction_param=${transactionId}`;
-    return { payment_url: url };
-  }
-
-  private checkSign(dto: ClickDto): boolean {
+  async prepare(data: any) {
     const {
       click_trans_id,
       service_id,
-      sign_time,
-      sign_string,
+      merchant_trans_id,
       amount,
       action,
-      merchant_trans_id,
-      merchant_prepare_id,
-    } = dto;
-    const secretKey = this.configService.get('CLICK_SECRET_KEY');
-    let stringToHash = `${click_trans_id}${service_id}${secretKey}${merchant_trans_id}`;
-    if (action === ClickAction.COMPLETE) {
-      stringToHash += `${merchant_prepare_id}`;
-    }
-    stringToHash += `${amount}${action}${sign_time}`;
-    const hash = crypto.createHash('md5');
-    hash.update(stringToHash);
-    const generatedSign = hash.digest('hex');
-    return generatedSign === sign_string;
-  }
+      sign_time,
+      sign_string,
+    } = data;
 
-  private async _validateTransaction(
-    dto: ClickDto,
-    transactionId: string,
-  ): Promise<any> {
-    if (!this.checkSign(dto)) {
-      return CLICK_ERRORS.SIGN_CHECK_FAILED;
+    const userId = merchant_trans_id;
+
+    const signatureData = {
+      click_trans_id,
+      service_id,
+      orderId: String(userId),
+      amount,
+      action,
+      sign_time,
+    }; // userId ni stringga o'tkazdik
+
+    const checkSignature = clickCheckToken(signatureData, sign_string);
+    if (!checkSignature) {
+      return { error: ClickError.SignFailed, error_note: 'Invalid sign' };
     }
 
-    const transaction = await this.transactionService.findById(transactionId);
-
-    if (!transaction) {
-      return CLICK_ERRORS.TRANSACTION_NOT_FOUND;
+    if (parseInt(action) !== ClickAction.Prepare) {
+      return {
+        error: ClickError.ActionNotFound,
+        error_note: 'Action not found',
+      };
     }
 
-    if (transaction.status === 'completed') {
-      return CLICK_ERRORS.ALREADY_PAID;
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      return { error: ClickError.UserNotFound, error_note: 'User not found' };
     }
 
-    if (transaction.status === 'failed') {
-      return CLICK_ERRORS.TRANSACTION_CANCELLED;
+    const existingTransaction = await this.transactionModel.findOne({
+      id: click_trans_id,
+      provider: 'click',
+    });
+    if (existingTransaction) {
+      if (
+        existingTransaction.state === TransactionState.Pending ||
+        existingTransaction.state === TransactionState.Paid
+      ) {
+        return {
+          error: ClickError.AlreadyPaid,
+          error_note:
+            'Transaction with this click_trans_id already exists and is not canceled',
+        };
+      }
     }
 
-    if (transaction.amount !== parseFloat(dto.amount)) {
-      return CLICK_ERRORS.INCORRECT_AMOUNT;
-    }
+    const time = new Date().getTime();
 
-    return transaction;
-  }
-
-  async prepare(dto: ClickDto) {
-    const validationResult = await this._validateTransaction(
-      dto,
-      dto.merchant_trans_id,
-    );
-
-    if (validationResult.error) {
-      return validationResult;
-    }
-
-    const transaction = validationResult;
+    const newTransaction = await this.transactionModel.create({
+      id: click_trans_id,
+      user: user._id,
+      amount: parseFloat(amount),
+      state: TransactionState.Pending,
+      create_time: time,
+      prepare_id: time,
+      provider: 'click',
+      type: TransactionType.DEPOSIT,
+    });
 
     return {
-      click_trans_id: dto.click_trans_id,
-      merchant_trans_id: dto.merchant_trans_id,
-      merchant_prepare_id: transaction._id.toString(),
-      error: 0,
+      click_trans_id,
+      merchant_trans_id: newTransaction._id,
+      merchant_prepare_id: time,
+      error: ClickError.Success,
       error_note: 'Success',
     };
   }
 
-  async complete(dto: ClickDto) {
-    const validationResult = await this._validateTransaction(
-      dto,
-      dto.merchant_prepare_id,
+  async complete(data: any) {
+    const {
+      click_trans_id,
+      service_id,
+      merchant_trans_id,
+      merchant_prepare_id,
+      amount,
+      action,
+      sign_time,
+      sign_string,
+      error,
+    } = data;
+
+    const transactionId = merchant_trans_id;
+
+    const order = await this.transactionModel.findById(transactionId);
+
+    if (!order) {
+      return {
+        error: ClickError.TransactionNotFound,
+        error_note: 'Transaction not found',
+      };
+    }
+
+    const userId = order.user;
+    const orderId = order._id;
+
+    const signatureData = {
+      click_trans_id,
+      service_id,
+      orderId: orderId.toString(),
+      merchant_prepare_id,
+      amount,
+      action,
+      sign_time,
+    }; // orderId ni stringga o'tkazdik
+
+    const checkSignature = clickCheckToken(signatureData, sign_string);
+
+    if (!checkSignature) {
+      return { error: ClickError.SignFailed, error_note: 'Invalid sign' };
+    }
+
+    if (parseInt(action) !== ClickAction.Complete) {
+      return {
+        error: ClickError.ActionNotFound,
+        error_note: 'Action not found',
+      };
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      return { error: ClickError.UserNotFound, error_note: 'User not found' };
+    }
+
+    const isPrepared = await this.transactionModel.findOne({
+      prepare_id: merchant_prepare_id,
+      provider: 'click',
+      _id: orderId,
+    });
+    if (!isPrepared) {
+      return {
+        error: ClickError.TransactionNotFound,
+        error_note: 'Transaction not found or not prepared',
+      };
+    }
+
+    if (isPrepared.state === TransactionState.Paid) {
+      return {
+        error: ClickError.AlreadyPaid,
+        error_note: 'Transaction already paid',
+      };
+    }
+
+    if (parseFloat(amount) !== isPrepared.amount) {
+      return {
+        error: ClickError.InvalidAmount,
+        error_note: 'Incorrect parameter amount',
+      };
+    }
+
+    const time = new Date().getTime();
+
+    if (error < 0) {
+      await this.transactionModel.findOneAndUpdate(
+        { _id: orderId },
+        { state: TransactionState.PendingCanceled, cancel_time: time },
+      );
+      return {
+        click_trans_id,
+        merchant_trans_id: orderId,
+        merchant_confirm_id: time,
+        error: ClickError.TransactionCanceled,
+        error_note: 'Transaction canceled',
+      };
+    }
+
+    user.balance = (user.balance || 0) + parseFloat(amount);
+    await user.save();
+
+    await this.transactionModel.findOneAndUpdate(
+      { _id: orderId },
+      { state: TransactionState.Paid, perform_time: time },
     );
 
-    if (validationResult.error) {
-      return validationResult;
-    }
-
-    const transaction = validationResult;
-
-    if (dto.error === '0') {
-      const updatedTransaction = await this.transactionService.updateStatus(
-        transaction._id.toString(),
-        'completed',
-      );
-      await this.userService.updateBalance(
-        updatedTransaction.owner.toString(),
-        updatedTransaction.amount,
-      );
-    } else {
-      await this.transactionService.updateStatus(
-        transaction._id.toString(),
-        'failed',
-      );
-    }
-
     return {
-      click_trans_id: dto.click_trans_id,
-      merchant_trans_id: dto.merchant_trans_id,
-      merchant_confirm_id: transaction._id.toString(),
-      error: 0,
+      click_trans_id,
+      merchant_trans_id: orderId,
+      merchant_confirm_id: time,
+      error: ClickError.Success,
       error_note: 'Success',
     };
   }

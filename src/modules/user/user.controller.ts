@@ -71,6 +71,8 @@ export class UserController {
   @UseGuards(TelegramInitDataGuard)
   async findByTelegramId(@Req() req: Request) {
     const initData = req['initData'];
+    console.log('findByTelegramId', initData);
+
     const user = await this.service.findByTelegramId(initData.telegram_id);
     return user;
   }
