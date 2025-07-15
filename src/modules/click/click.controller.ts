@@ -72,6 +72,7 @@ export class ClickController {
     @Req() req: Request, // Request ob'ektini olamiz
   ) {
     const CLICK_SERVICE_ID = process.env.CLICK_SERVICE_ID;
+    const TELEGRAM_BOT_URL = process.env.TELEGRAM_BOT_URL;
     const CLICK_MERCHANT_ID = process.env.CLICK_MERCHANT_ID;
     const CLICK_MERCHANT_USER_ID = process.env.CLICK_MERCHANT_USER_ID;
     const CLICK_CHECKOUT_LINK = process.env.CLICK_CHECKOUT_LINK;
@@ -90,10 +91,7 @@ export class ClickController {
     params.append('merchant_user_id', CLICK_MERCHANT_USER_ID);
     params.append('amount', amount.toString());
     params.append('transaction_param', userId); // Foydalanuvchi ID'sini yuboramiz
-    params.append(
-      'return_url',
-      'https://t.me/cs2_skin_market_bot/WebApp=?startapp=cs2',
-    );
+    params.append('return_url', `${TELEGRAM_BOT_URL}/WebApp=?startapp=cs2`);
 
     const paymentUrl = `${CLICK_CHECKOUT_LINK}?${params.toString()}`;
 

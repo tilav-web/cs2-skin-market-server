@@ -73,14 +73,14 @@ ${descriptionBlock}
 `;
     };
 
-    const clientUrl = this.configService.get<string>('CLIENT_URL'); // CLIENT_URL dan olamiz
-    if (!clientUrl) {
-      throw new Error('CLIENT_URL is not defined in the configuration.');
+    const telegramBotUrl = this.configService.get<string>('TELEGRAM_BOT_URL'); // CLIENT_URL dan olamiz
+    if (!telegramBotUrl) {
+      throw new Error('TELEGRAM_BOT_URL is not defined in the configuration.');
     }
 
     const inlineKeyboard = new InlineKeyboard().webApp(
       skin.price === 0 ? '🧨TEKINGA OLISH🧨' : 'Skinni sotib olish',
-      `${clientUrl}/skins/buy/${skin._id}`,
+      `${telegramBotUrl}/WebApp=?startapp=skins_buy_${skin._id}`,
     );
 
     const jobData: PublishSkinJobData = {
