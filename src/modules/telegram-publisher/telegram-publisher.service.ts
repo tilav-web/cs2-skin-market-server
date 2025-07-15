@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { SkinDocument } from '../skin/skin.schema';
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import { ConfigService } from '@nestjs/config';
 
 export interface PublishSkinJobData {
@@ -10,6 +10,7 @@ export interface PublishSkinJobData {
   chatId: string; // Telegram kanal IDsi
   caption: string; // Post matni
   photoUrl: string; // Skin rasmi URLsi
+  replyMarkup?: InlineKeyboard; // Yangi: InlineKeyboard
 }
 
 export interface UpdateSkinStatusJobData {
@@ -39,9 +40,6 @@ export class TelegramPublisherService {
   }
 
   async addPublishSkinJob(skin: SkinDocument, delay: number) {
-    console.log(
-      `[DEBUG] addPublishSkinJob qabul qilindi. Skin ID: ${skin._id}, Delay: ${delay}ms`,
-    );
     const generateSkinPostHTML = (skin: SkinDocument): string => {
       const isFree = skin.price === 0;
       const tradeStatus = skin.tradable
@@ -71,22 +69,32 @@ export class TelegramPublisherService {
 <b> Trade:</b> ${tradeStatus}
 ${descriptionBlock}
 
- <i>Skinni ${isFree ? 'olish' : 'sotib olish'} uchun pastdagi tugmadan foydalaning</i>
+ <i>Skinni ${isFree ? '🧨TEKINGA OLISH🧨' : 'sotib olish'} uchun pastdagi tugmadan foydalaning</i>
 `;
     };
+
+    const clientUrl = this.configService.get<string>('CLIENT_URL'); // CLIENT_URL dan olamiz
+    if (!clientUrl) {
+      throw new Error('CLIENT_URL is not defined in the configuration.');
+    }
+
+    const inlineKeyboard = new InlineKeyboard().webApp(
+      skin.price === 0 ? '🧨TEKINGA OLISH🧨' : 'Skinni sotib olish',
+      `${clientUrl}/skins/buy/${skin._id}`,
+    );
 
     const jobData: PublishSkinJobData = {
       skinId: skin._id.toString(),
       chatId: process.env.TELEGRAM_CHANNEL_ID || '',
       caption: generateSkinPostHTML(skin), // HTML formatidagi caption
       photoUrl: skin.icon_url,
+      replyMarkup: inlineKeyboard,
     };
     await this.telegramQueue.add('publish-skin', jobData, {
       delay: delay,
       removeOnComplete: true,
       removeOnFail: false,
     });
-    console.log(`[DEBUG] Job 'publish-skin' navbatga qo'shildi.`);
   }
 
   async addUpdateSkinStatusJob(skin: SkinDocument) {
@@ -150,7 +158,7 @@ ${descriptionBlock}
 <b>♻️ Holati:</b> ${skin.status}
 <b> Trade:</b> ${tradeStatus}
 ${descriptionBlock}
-`; // Tugma va oxirgi matnni olib tashladik
+`;
     };
 
     const baseMessage = generateSkinPostHTML(skin);
@@ -185,11 +193,9 @@ Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
 
   async editMessageText(chatId: string, messageId: string, text: string) {
     try {
-      // Matnni tahrirlash
       await this.bot.api.editMessageText(chatId, Number(messageId), text, {
         parse_mode: 'HTML',
       });
-      // Inline tugmalarni olib tashlash
       await this.bot.api.editMessageReplyMarkup(chatId, Number(messageId), {
         reply_markup: { inline_keyboard: [] },
       });

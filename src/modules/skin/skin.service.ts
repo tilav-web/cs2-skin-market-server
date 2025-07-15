@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose'; // Types ni import qilish
+import { Model, Types } from 'mongoose';
 import { Skin, SkinDocument } from './skin.schema';
 import { CreateSkinDto } from './dto/create-skin.dto';
 import { UserService } from '../user/user.service';
@@ -33,18 +33,15 @@ export class SkinService {
       throw new BadRequestException('Invalid Skin ID format');
     }
 
-    // user._id ni ham ObjectId ga o'tkazib qidiramiz
     let objectIdUserId: Types.ObjectId;
     try {
-      objectIdUserId = new Types.ObjectId(user._id.toString()); // user._id ni stringga o'tkazamiz
+      objectIdUserId = new Types.ObjectId(user._id.toString());
     } catch {
       throw new BadRequestException('Invalid User ID format');
     }
 
-    // DTO dan qiymatlarni ajratib olish
     const { price, advertising, advertising_hours, description } = dto;
 
-    // Sotuvga qo'yishdan oldin skin holatini tekshirish
     const existingSkin = await this.skinModel.findOne({
       _id: objectIdSkinId,
       user: objectIdUserId,
@@ -58,37 +55,31 @@ export class SkinService {
       );
     }
 
-    // Narxi 0 bo'lgan skinni reklama qilishni cheklash
     if (price === 0 && advertising) {
       throw new BadRequestException(
         "Narxi 0 bo'lgan skinni reklama qilish mumkin emas.",
       );
     }
 
-    // 1. Komissiyani hisoblash
     let commission_rate = price > 0 ? 0.05 : 0;
     if (advertising) {
       commission_rate += 0.02;
     }
 
-    // 2. Telegram reklamasini hisoblash va to'lovni amalga oshirish
     let advertising_cost = 0;
     let publish_at: Date | null = null;
     let expires_at: Date | null = null;
 
-    // publish_at ni hisoblash
     const lastAdvertisedSkin = await this.skinModel
       .findOne({ expires_at: { $ne: null } })
       .sort({ expires_at: -1 });
 
-    let next_publish_time = new Date(Date.now() + 2 * 60 * 1000); // Default: hozirgi vaqtdan 2 daqiqa keyin
+    let next_publish_time = new Date(Date.now() + 2 * 60 * 1000);
 
     if (lastAdvertisedSkin && lastAdvertisedSkin.expires_at) {
-      // Agar oxirgi reklama vaqti hozirgi vaqtdan o'tib ketgan bo'lsa, yangi vaqtni hozirgidan 2 daqiqa keyinga belgilaymiz
       if (lastAdvertisedSkin.expires_at.getTime() < Date.now()) {
         next_publish_time = new Date(Date.now() + 2 * 60 * 1000);
       } else {
-        // Aks holda, oxirgi reklama vaqtidan 2 daqiqa keyinga belgilaymiz
         next_publish_time = new Date(
           lastAdvertisedSkin.expires_at.getTime() + 2 * 60 * 1000,
         );
@@ -97,14 +88,12 @@ export class SkinService {
 
     publish_at = next_publish_time;
 
-    // expires_at ni hisoblash
     if (advertising_hours && advertising_hours > 0) {
       advertising_cost = advertising_hours * 1000;
       expires_at = new Date(
         publish_at.getTime() + advertising_hours * 60 * 60 * 1000,
       );
 
-      // Balans va cashbackni tekshirish
       const currentBalance = user.balance ?? 0;
       const currentCashback = user.cashback ?? 0;
 
@@ -114,7 +103,6 @@ export class SkinService {
         );
       }
 
-      // To'lovni amalga oshirish
       let remaining_cost = advertising_cost;
       const cashback_to_use = Math.min(currentCashback, remaining_cost);
       user.cashback = currentCashback - cashback_to_use;
@@ -125,11 +113,9 @@ export class SkinService {
       }
       await user.save();
     } else {
-      // Agar advertising_hours 0 bo'lsa, expires_at ni publish_at dan 2 daqiqa keyinga belgilaymiz
       expires_at = new Date(publish_at.getTime() + 2 * 60 * 1000);
     }
 
-    // --- DEBUG LOGS BEFORE UPDATE ---
     console.log('--- DEBUG: Values before findOneAndUpdate ---');
     console.log('price:', price);
     console.log('description:', description);
@@ -151,14 +137,13 @@ export class SkinService {
         advertising_cost,
         publish_at,
         expires_at,
-        status: 'pending', // Changed from 'available' to 'pending'
+        status: 'pending',
       },
-      { new: true }, // Yangilangan dokumentni qaytarish uchun
+      { new: true },
     );
 
     if (!skin) throw new NotFoundException('Skin not found or not yours');
 
-    // 4. Telegramga post qilish uchun vazifa qo'shish (agar kerak bo'lsa)
     if (skin.publish_at) {
       const delay = skin.publish_at.getTime() - Date.now();
       await this.telegramPublisherService.addPublishSkinJob(
@@ -167,7 +152,6 @@ export class SkinService {
       );
     }
 
-    // Foydalanuvchiga Telegram orqali xabar yuborish
     await this.telegramPublisherService.sendSkinListingToUser(
       telegram_id,
       skin,
@@ -204,7 +188,6 @@ export class SkinService {
     );
     if (!updated) throw new NotFoundException('Skin not found or not yours');
 
-    // Agar skin reklama uchun belgilangan bo'lsa va publish_at/expires_at o'zgargan bo'lsa
     if (updated.advertising && updated.publish_at) {
       const delay = updated.publish_at.getTime() - Date.now();
       if (delay > 0) {
@@ -213,7 +196,6 @@ export class SkinService {
         await this.telegramPublisherService.addPublishSkinJob(updated, 0);
       }
     }
-    // Agar expires_at mavjud bo'lsa va message_id mavjud bo'lsa, o'chirish vazifasini qo'shish
     if (updated.advertising && updated.expires_at && updated.message_id) {
       const deleteDelay = updated.expires_at.getTime() - Date.now();
       if (deleteDelay > 0) {
@@ -237,13 +219,12 @@ export class SkinService {
     });
     if (!deleted) throw new NotFoundException('Skin not found or not yours');
 
-    // Agar skin Telegramda joylangan bo'lsa, uni o'chirish vazifasini qo'shish
     if (deleted.message_id && process.env.TELEGRAM_CHANNEL_ID) {
       await this.telegramPublisherService.addDeleteSkinJob(
         deleted.message_id,
         process.env.TELEGRAM_CHANNEL_ID,
         0,
-      ); // Darhol o'chirish
+      );
     }
 
     return deleted;
@@ -311,7 +292,8 @@ export class SkinService {
       throw new BadRequestException('Skin is not in pending status.');
     }
 
-    // Update skin status and reset advertising fields
+    const telegramMessageId = skin.message_id;
+
     skin.status = 'available';
     skin.advertising = false;
     skin.message_id = null;
@@ -319,12 +301,11 @@ export class SkinService {
     skin.expires_at = null;
     await skin.save();
 
-    // Delete message from Telegram if it was published
-    if (skin.message_id && process.env.TELEGRAM_CHANNEL_ID) {
+    if (telegramMessageId && process.env.TELEGRAM_CHANNEL_ID) {
       const newCaption = `<b>Skin sotuvdan olib tashlandi!</b>\n\n${skin.market_hash_name}`;
       await this.telegramPublisherService.editMessageText(
         process.env.TELEGRAM_CHANNEL_ID,
-        skin.message_id,
+        telegramMessageId,
         newCaption,
       );
     }
