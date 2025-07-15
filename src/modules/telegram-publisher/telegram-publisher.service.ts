@@ -73,12 +73,12 @@ ${descriptionBlock}
 `;
     };
 
-    const telegramBotUrl = this.configService.get<string>('TELEGRAM_BOT_URL'); // CLIENT_URL dan olamiz
+    const telegramBotUrl = this.configService.get<string>('TELEGRAM_BOT_URL'); // TELEGRAM_BOT_URL dan olamiz
     if (!telegramBotUrl) {
       throw new Error('TELEGRAM_BOT_URL is not defined in the configuration.');
     }
 
-    const inlineKeyboard = new InlineKeyboard().webApp(
+    const inlineKeyboard = new InlineKeyboard().url(
       skin.price === 0 ? '🧨TEKINGA OLISH🧨' : 'Skinni sotib olish',
       `${telegramBotUrl}/WebApp=?startapp=skins_buy_${skin._id}`,
     );
