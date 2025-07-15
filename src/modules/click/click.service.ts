@@ -9,6 +9,7 @@ import {
   TransactionType,
 } from '../transaction/transaction.schema';
 import { User, UserDocument } from '../user/user.schema';
+import { UserService } from '../user/user.service'; // UserService ni import qilamiz
 
 @Injectable()
 export class ClickService {
@@ -16,6 +17,7 @@ export class ClickService {
     @InjectModel(Transaction.name)
     private transactionModel: Model<TransactionDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly userService: UserService, // UserService ni inject qilamiz
   ) {}
 
   async prepare(data: any) {
@@ -29,16 +31,16 @@ export class ClickService {
       sign_string,
     } = data;
 
-    const userId = merchant_trans_id;
+    const telegramId = merchant_trans_id; // merchant_trans_id bu yerda foydalanuvchi telegram_id
 
     const signatureData = {
       click_trans_id,
       service_id,
-      orderId: String(userId),
+      orderId: String(telegramId),
       amount,
       action,
       sign_time,
-    }; // userId ni stringga o'tkazdik
+    }; // orderId o'rniga telegramId ishlatamiz
 
     const checkSignature = clickCheckToken(signatureData, sign_string);
     if (!checkSignature) {
@@ -52,7 +54,7 @@ export class ClickService {
       };
     }
 
-    const user = await this.userModel.findById(userId);
+    const user = await this.userService.findByTelegramId(telegramId); // findById o'rniga findByTelegramId ishlatamiz
     if (!user) {
       return { error: ClickError.UserNotFound, error_note: 'User not found' };
     }
@@ -78,7 +80,7 @@ export class ClickService {
 
     const newTransaction = await this.transactionModel.create({
       id: click_trans_id,
-      user: user._id,
+      user: user._id, // Foydalanuvchi ID'si (MongoDB ObjectId)
       amount: parseFloat(amount),
       state: TransactionState.Pending,
       create_time: time,
@@ -89,7 +91,7 @@ export class ClickService {
 
     return {
       click_trans_id,
-      merchant_trans_id: newTransaction._id,
+      merchant_trans_id: newTransaction._id, // Yangi yaratilgan tranzaksiya ID'sini qaytaramiz
       merchant_prepare_id: time,
       error: ClickError.Success,
       error_note: 'Success',
@@ -131,7 +133,7 @@ export class ClickService {
       amount,
       action,
       sign_time,
-    }; // orderId ni stringga o'tkazdik
+    };
 
     const checkSignature = clickCheckToken(signatureData, sign_string);
 
