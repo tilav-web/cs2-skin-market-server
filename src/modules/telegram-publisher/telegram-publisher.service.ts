@@ -162,12 +162,13 @@ ${descriptionBlock}
     };
 
     const baseMessage = generateSkinPostHTML(skin);
+    const telegramChannel = this.configService.get<string>('TELEGRAM_CHANNEL');
 
     const message = `${baseMessage}
 
 Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
 
-<i>Sizning skiningizni kuzatib boring!</i>`;
+<i>Sizning skiningizni kuzatib boring! @${telegramChannel}</i>`;
 
     try {
       await this.bot.api.sendPhoto(telegramId, skin.icon_url, {

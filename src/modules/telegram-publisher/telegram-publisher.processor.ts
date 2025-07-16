@@ -15,7 +15,7 @@ import { Skin, SkinDocument } from '../skin/skin.schema';
 export class TelegramPublisherProcessor extends WorkerHost {
   private readonly logger = new Logger(TelegramPublisherProcessor.name);
   private readonly bot: Bot;
-  private readonly clientBaseUrl: string; // Yangi maydon
+  private readonly telegramBotUrl: string;
 
   constructor(
     private configService: ConfigService,
@@ -27,10 +27,12 @@ export class TelegramPublisherProcessor extends WorkerHost {
       throw new Error('BOT_TOKEN is not defined in the configuration.');
     }
     this.bot = new Bot(botToken);
-    this.clientBaseUrl = this.configService.get<string>('CLIENT_URL'); // CLIENT_URL ga o'zgartirildi
-    if (!this.clientBaseUrl) {
-      this.logger.error('CLIENT_URL is not defined in the configuration.');
-      throw new Error('CLIENT_URL is not defined in the configuration.');
+    this.telegramBotUrl = this.configService.get<string>('TELEGRAM_BOT_URL'); // TELEGRAM_BOT_URL ga o'zgartirildi
+    if (!this.telegramBotUrl) {
+      this.logger.error(
+        'TELEGRAM_BOT_URL is not defined in the configuration.',
+      );
+      throw new Error('TELEGRAM_BOT_URL is not defined in the configuration.');
     }
   }
 
@@ -65,7 +67,7 @@ export class TelegramPublisherProcessor extends WorkerHost {
                       skin.price === 0
                         ? 'TEKINGA OLING😊'
                         : `${skin.price} so'm`,
-                    url: `${this.clientBaseUrl}/skins/buy/${data.skinId}`,
+                    url: `${this.telegramBotUrl}/WebApp=?startapp=skins_buy_${data.skinId}`,
                   },
                 ],
               ],
