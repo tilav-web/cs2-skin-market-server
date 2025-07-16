@@ -8,6 +8,7 @@ import { BotModule } from './modules/bot/bot.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { TelegramPublisherModule } from './modules/telegram-publisher/telegram-publisher.module';
 import { ClickModule } from './modules/click/click.module';
+import { ReferralModule } from './modules/referral/referral.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ClickModule } from './modules/click/click.module';
     TransactionModule,
     TelegramPublisherModule,
     ClickModule,
+    ReferralModule,
   ],
   controllers: [],
   providers: [],

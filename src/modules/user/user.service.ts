@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './user.schema';
@@ -6,15 +6,18 @@ import { botToken } from 'src/utils/shared';
 import { createHmac } from 'crypto';
 import axios from 'axios';
 import { Skin, SkinDocument } from '../skin/skin.schema';
+import { ReferralService } from '../referral/referral.service';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) public model: Model<UserDocument>,
     @InjectModel(Skin.name) private skinModel: Model<SkinDocument>,
+    @Inject(forwardRef(() => ReferralService))
+    private readonly referralService: ReferralService,
   ) {}
 
-  validateInitData(initData: string): string | null {
+  validateInitData(initData: string): { telegramId: string; startParam?: string } | null {
     const secretKey = createHmac('sha256', 'WebAppData')
       .update(botToken)
       .digest();
@@ -33,7 +36,8 @@ export class UserService {
 
     if (computedHash === receivedHash) {
       const userData = JSON.parse(params.get('user') || '{}');
-      return userData.id; // telegram_id
+      const startParam = params.get('start_param');
+      return { telegramId: userData.id, startParam };
     }
     return null;
   }
@@ -42,6 +46,7 @@ export class UserService {
     telegramId: string,
     steamId: string,
     profile: any,
+    startParam?: string,
   ): Promise<User> {
     let user = await this.model.findOne({ telegram_id: telegramId });
 
@@ -54,19 +59,26 @@ export class UserService {
         status: 'active',
         balance: 0,
       });
+      await user.save(); // Save the user first to get _id
+
+      if (startParam) {
+        // Handle referral after user is saved
+        await this.referralService.handleReferral(startParam, telegramId);
+      }
     } else {
       user.steam_id = steamId;
       user.personaname = profile.displayName || user.personaname;
       user.photo = profile.photos?.[2]?.value || user.photo;
+      await user.save();
     }
 
-    return user.save();
+    return user;
   }
 
   async findByTelegramId(telegram_id: string) {
     const user = await this.model
       .findOne({ telegram_id })
-      .select('_id phone photo telegram_id balance personaname steam_id');
+      .select('_id phone photo telegram_id balance personaname steam_id cashback');
     return user;
   }
 
@@ -155,5 +167,9 @@ export class UserService {
 
   async updateBalance(userId: string, amount: number): Promise<void> {
     await this.model.updateOne({ _id: userId }, { $inc: { balance: amount } });
+  }
+
+  async updateCashback(userId: Types.ObjectId, amount: number): Promise<void> {
+    await this.model.updateOne({ _id: userId }, { $inc: { cashback: amount } });
   }
 }
