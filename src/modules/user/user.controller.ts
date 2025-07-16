@@ -76,7 +76,7 @@ export class UserController {
   @UseGuards(TelegramInitDataGuard)
   async findByTelegramId(@Req() req: Request) {
     const initData = req['initData'];
-    const user = await this.service.findByTelegramId(initData.telegramId);
+    const user = await this.service.findByTelegramId(initData.telegram_id);
     return user;
   }
 
@@ -87,7 +87,7 @@ export class UserController {
     const refreshFromSteam = refresh === 'true';
     try {
       const skins = await this.service.getUserSkins({
-        telegram_id: initData.telegramId,
+        telegram_id: initData.telegram_id,
         refreshFromSteam,
       });
       return skins;
@@ -100,7 +100,7 @@ export class UserController {
   @UseGuards(TelegramInitDataGuard)
   async updateTradeUrl(@Req() req: Request, @Body('tradeUrl') tradeUrl: string) {
     const initData = req['initData'];
-    const user = await this.service.findByTelegramId(initData.telegramId);
+    const user = await this.service.findByTelegramId(initData.telegram_id);
     if (!user) {
       throw new UnauthorizedException('Foydalanuvchi topilmadi');
     }
