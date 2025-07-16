@@ -288,27 +288,36 @@ export class SkinService {
       throw new NotFoundException('Skin not found or not yours');
     }
 
-    if (skin.status !== 'pending') {
-      throw new BadRequestException('Skin is not in pending status.');
+    if (skin.status !== 'pending' && skin.status !== 'available') {
+      throw new BadRequestException(
+        'Only skins that are pending or available can be canceled.',
+      );
     }
 
-    const telegramMessageId = skin.message_id;
+    // Agar skin kanalga joylangan bo'lsa, uni tahrirlash
+    if (skin.message_id && process.env.TELEGRAM_CHANNEL_ID) {
+      // 1. Postni o'zgartirish vazifasini navbatga qo'shamiz
+      await this.telegramPublisherService.addCancelSaleJob(skin);
 
-    skin.status = 'available';
+      // 2. Foydalanuvchiga xabar yuboramiz
+      await this.telegramPublisherService.sendCancellationNoticeToUser(
+        telegram_id,
+        skin,
+      );
+    }
+
+    // 3. Skin ma'lumotlarini asl holiga qaytaramiz
+    skin.status = 'not_listed'; // Yoki 'available_in_inventory' kabi status
+    skin.price = null;
     skin.advertising = false;
     skin.message_id = null;
     skin.publish_at = null;
     skin.expires_at = null;
-    await skin.save();
+    skin.description = null;
+    skin.commission_rate = null;
+    skin.advertising_cost = null;
 
-    if (telegramMessageId && process.env.TELEGRAM_CHANNEL_ID) {
-      const newCaption = `<b>Skin sotuvdan olib tashlandi!</b>\n\n${skin.market_hash_name}`;
-      await this.telegramPublisherService.editMessageText(
-        process.env.TELEGRAM_CHANNEL_ID,
-        telegramMessageId,
-        newCaption,
-      );
-    }
+    await skin.save();
 
     return skin;
   }

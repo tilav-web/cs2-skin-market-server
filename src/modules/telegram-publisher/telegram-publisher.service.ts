@@ -121,6 +121,34 @@ ${descriptionBlock}
     });
   }
 
+  async addCancelSaleJob(skin: SkinDocument) {
+    const jobData: UpdateSkinStatusJobData = {
+      skinId: skin._id.toString(),
+      messageId: skin.message_id,
+      chatId: process.env.TELEGRAM_CHANNEL_ID || '',
+    };
+    await this.telegramQueue.add('cancel-sale-in-telegram', jobData, {
+      removeOnComplete: true,
+      removeOnFail: false,
+    });
+  }
+
+  async sendCancellationNoticeToUser(telegramId: string, skin: SkinDocument) {
+    const message = `Sizning "<b>${skin.market_hash_name}</b>" nomli skiningiz sotuvdan olib tashlandi.
+
+Kanalimizdagi e'lon tez orada yangilanadi va "Sotib olish" tugmasi olib tashlanadi. Xavotir olmang, skiningiz endi sotilmaydi.`;
+
+    try {
+      await this.bot.api.sendMessage(telegramId, message, {
+        parse_mode: 'HTML',
+      });
+    } catch (error) {
+      console.error(
+        `Foydalanuvchiga bekor qilinganlik haqida xabar yuborishda xatolik ${telegramId}: ${error.message}`,
+      );
+    }
+  }
+
   async sendSkinListingToUser(
     telegramId: string,
     skin: SkinDocument,
