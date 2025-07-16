@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Referrals, ReferralsSchema } from './referral.schema';
 import { ReferralService } from './referral.service';
@@ -9,11 +9,11 @@ import { TransactionModule } from '../transaction/transaction.module';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Referrals.name, schema: ReferralsSchema }]),
-    UserModule, // UserModule'ni import qilamiz, chunki ReferralService User'ni yangilaydi
-    TransactionModule, // TransactionModule'ni import qilamiz, chunki ReferralService Transaction yaratadi
+    forwardRef(() => UserModule),
+    forwardRef(() => TransactionModule),
   ],
   providers: [ReferralService],
   controllers: [ReferralController],
-  exports: [ReferralService], // Boshqa modullar ReferralService'dan foydalanishi uchun
+  exports: [ReferralService],
 })
 export class ReferralModule {}

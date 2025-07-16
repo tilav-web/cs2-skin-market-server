@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TransactionController } from './transaction.controller';
 import { TransactionService } from './transaction.service';
@@ -15,7 +15,7 @@ import { TelegramPublisherModule } from '../telegram-publisher/telegram-publishe
       { name: User.name, schema: UserSchema },
       { name: Skin.name, schema: SkinSchema },
     ]),
-    UserModule,
+    forwardRef(() => UserModule),
     TelegramPublisherModule,
   ],
   controllers: [TransactionController],

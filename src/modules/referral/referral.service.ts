@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -15,6 +15,7 @@ export class ReferralService {
   constructor(
     @InjectModel(Referrals.name)
     private referralsModel: Model<ReferralsDocument>,
+    @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     private readonly transactionService: TransactionService,
   ) {}
