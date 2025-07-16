@@ -9,7 +9,7 @@ import { TransactionType } from '../transaction.schema';
 
 export class CreateTransactionDto {
   @IsMongoId()
-  owner: string;
+  userId: string;
 
   @IsOptional()
   @IsMongoId()

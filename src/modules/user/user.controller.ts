@@ -58,11 +58,12 @@ export class UserController {
     if (!initData) {
       throw new UnauthorizedException('initData topilmadi');
     }
-    const telegramId = this.service.validateInitData(initData);
-    if (!telegramId) {
+    const validationResult = this.service.validateInitData(initData);
+    if (!validationResult || !validationResult.telegramId) {
       throw new UnauthorizedException('initData tasdiqlanmadi');
     }
-    await this.service.linkTelegramToSteam(telegramId, steamId, profile);
+    const { telegramId, startParam } = validationResult;
+    await this.service.linkTelegramToSteam(telegramId, steamId, profile, startParam);
     res.clearCookie('initData');
     res.redirect(`https://t.me/cs2_skin_market_bot`);
   }

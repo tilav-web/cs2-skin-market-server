@@ -19,10 +19,13 @@ export class TelegramInitDataGuard implements CanActivate {
         'initData (authorization header) is required',
       );
     }
-    const telegramId = this.userService.validateInitData(initData as string);
-    if (!telegramId) {
+    const validationResult = this.userService.validateInitData(
+      initData as string,
+    );
+    if (!validationResult || !validationResult.telegramId) {
       throw new UnauthorizedException('Invalid initData');
     }
+    const telegramId = validationResult.telegramId;
 
     const user = await this.userService.findByTelegramId(telegramId);
     if (!user) {

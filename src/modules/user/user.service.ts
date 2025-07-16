@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './user.schema';
 import { botToken } from 'src/utils/shared';
 import { createHmac } from 'crypto';
@@ -51,6 +51,7 @@ export class UserService {
     let user = await this.model.findOne({ telegram_id: telegramId });
 
     if (!user) {
+      // New user creation
       user = new this.model({
         telegram_id: telegramId,
         steam_id: steamId,
@@ -59,6 +60,7 @@ export class UserService {
         status: 'active',
         balance: 0,
       });
+
       await user.save(); // Save the user first to get _id
 
       if (startParam) {
@@ -66,6 +68,7 @@ export class UserService {
         await this.referralService.handleReferral(startParam, telegramId);
       }
     } else {
+      // Existing user update
       user.steam_id = steamId;
       user.personaname = profile.displayName || user.personaname;
       user.photo = profile.photos?.[2]?.value || user.photo;

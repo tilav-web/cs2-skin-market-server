@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Referrals, ReferralsSchema } from './referrals.schema';
+import { Referrals, ReferralsSchema } from './referral.schema';
 import { ReferralService } from './referral.service';
 import { ReferralController } from './referral.controller';
 import { UserModule } from '../user/user.module';
