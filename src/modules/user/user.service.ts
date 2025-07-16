@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './user.schema';
@@ -17,7 +22,9 @@ export class UserService {
     private readonly referralService: ReferralService,
   ) {}
 
-  validateInitData(initData: string): { telegramId: string; startParam?: string } | null {
+  validateInitData(
+    initData: string,
+  ): { telegramId: string; startParam?: string } | null {
     const secretKey = createHmac('sha256', 'WebAppData')
       .update(botToken)
       .digest();
@@ -79,9 +86,7 @@ export class UserService {
   }
 
   async findByTelegramId(telegram_id: string) {
-    const user = await this.model
-      .findOne({ telegram_id })
-      .select('_id phone photo telegram_id balance personaname steam_id cashback');
+    const user = await this.model.findOne({ telegram_id }).lean().exec();
     return user;
   }
 
@@ -176,8 +181,13 @@ export class UserService {
     await this.model.updateOne({ _id: userId }, { $inc: { cashback: amount } });
   }
 
-  async updateTradeUrl(userId: Types.ObjectId, tradeUrl: string): Promise<UserDocument> {
-    const user = await this.model.findByIdAndUpdate(userId, { trade_url: tradeUrl }, { new: true }).exec();
+  async updateTradeUrl(
+    userId: Types.ObjectId,
+    tradeUrl: string,
+  ): Promise<UserDocument> {
+    const user = await this.model
+      .findByIdAndUpdate(userId, { trade_url: tradeUrl }, { new: true })
+      .exec();
     if (!user) {
       throw new UnauthorizedException('Foydalanuvchi topilmadi');
     }

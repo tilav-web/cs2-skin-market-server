@@ -13,7 +13,6 @@ import { UserService } from './user.service';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
-import { UserDocument } from './user.schema';
 import { Types } from 'mongoose';
 
 declare module 'express-session' {
@@ -67,9 +66,14 @@ export class UserController {
       throw new UnauthorizedException('initData tasdiqlanmadi');
     }
     const { telegramId, startParam } = validationResult;
-    await this.service.linkTelegramToSteam(telegramId, steamId, profile, startParam);
+    await this.service.linkTelegramToSteam(
+      telegramId,
+      steamId,
+      profile,
+      startParam,
+    );
     res.clearCookie('initData');
-    res.redirect(`https://t.me/cs2_skin_market_bot`);
+    res.redirect(`${process.env.TELEGRAM_BOT_URL}/WebApp?startapp=profile`);
   }
 
   @Get('find/me')
@@ -98,13 +102,19 @@ export class UserController {
 
   @Put('trade-url')
   @UseGuards(TelegramInitDataGuard)
-  async updateTradeUrl(@Req() req: Request, @Body('tradeUrl') tradeUrl: string) {
+  async updateTradeUrl(
+    @Req() req: Request,
+    @Body('tradeUrl') tradeUrl: string,
+  ) {
     const initData = req['initData'];
     const user = await this.service.findByTelegramId(initData.telegram_id);
     if (!user) {
       throw new UnauthorizedException('Foydalanuvchi topilmadi');
     }
-    const updatedUser = await this.service.updateTradeUrl(user._id as Types.ObjectId, tradeUrl);
+    const updatedUser = await this.service.updateTradeUrl(
+      user._id as Types.ObjectId,
+      tradeUrl,
+    );
     return updatedUser;
   }
 }
