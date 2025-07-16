@@ -11,6 +11,7 @@ import {
 import { ClickService } from './click.service';
 import { Response, Request } from 'express';
 import { TelegramInitDataGuard } from '../user/guards/telegram-initdata.guard';
+import { ClickDto } from './dto/click.dto';
 
 @Controller('click')
 export class ClickController {
@@ -43,7 +44,7 @@ export class ClickController {
   }
 
   @Post('complete')
-  async complete(@Body() data: any, @Res() res: Response) {
+  async complete(@Body() data: ClickDto, @Res() res: Response) {
     try {
       const result = await this.clickService.complete(data);
       res
@@ -74,7 +75,6 @@ export class ClickController {
     const CLICK_SERVICE_ID = process.env.CLICK_SERVICE_ID;
     const TELEGRAM_BOT_URL = process.env.TELEGRAM_BOT_URL;
     const CLICK_MERCHANT_ID = process.env.CLICK_MERCHANT_ID;
-    const CLICK_MERCHANT_USER_ID = process.env.CLICK_MERCHANT_USER_ID;
     const CLICK_CHECKOUT_LINK = process.env.CLICK_CHECKOUT_LINK;
 
     // Foydalanuvchi ID'sini req.initData.telegram_id dan olamiz
@@ -88,12 +88,12 @@ export class ClickController {
     const params = new URLSearchParams();
     params.append('service_id', CLICK_SERVICE_ID);
     params.append('merchant_id', CLICK_MERCHANT_ID);
-    params.append('merchant_user_id', CLICK_MERCHANT_USER_ID);
     params.append('amount', amount.toString());
-    params.append('transaction_param', userId); // Foydalanuvchi ID'sini yuboramiz
-    params.append('return_url', `${TELEGRAM_BOT_URL}/WebApp=?startapp=cs2`);
+    params.append('transaction_param', userId);
+    params.append('return_url', `${TELEGRAM_BOT_URL}/WebApp=?startapp=profile`);
 
     const paymentUrl = `${CLICK_CHECKOUT_LINK}?${params.toString()}`;
+    console.log(paymentUrl);
 
     res.status(HttpStatus.OK).json({ payment_url: paymentUrl });
   }
