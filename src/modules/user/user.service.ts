@@ -175,4 +175,12 @@ export class UserService {
   async updateCashback(userId: Types.ObjectId, amount: number): Promise<void> {
     await this.model.updateOne({ _id: userId }, { $inc: { cashback: amount } });
   }
+
+  async updateTradeUrl(userId: Types.ObjectId, tradeUrl: string): Promise<UserDocument> {
+    const user = await this.model.findByIdAndUpdate(userId, { trade_url: tradeUrl }, { new: true }).exec();
+    if (!user) {
+      throw new UnauthorizedException('Foydalanuvchi topilmadi');
+    }
+    return user;
+  }
 }

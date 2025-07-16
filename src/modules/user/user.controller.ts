@@ -6,11 +6,15 @@ import {
   UnauthorizedException,
   UseGuards,
   Query,
+  Put,
+  Body,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
+import { UserDocument } from './user.schema';
+import { Types } from 'mongoose';
 
 declare module 'express-session' {
   interface SessionData {
@@ -72,9 +76,7 @@ export class UserController {
   @UseGuards(TelegramInitDataGuard)
   async findByTelegramId(@Req() req: Request) {
     const initData = req['initData'];
-    console.log('findByTelegramId', initData);
-
-    const user = await this.service.findByTelegramId(initData.telegram_id);
+    const user = await this.service.findByTelegramId(initData.telegramId);
     return user;
   }
 
@@ -85,12 +87,24 @@ export class UserController {
     const refreshFromSteam = refresh === 'true';
     try {
       const skins = await this.service.getUserSkins({
-        telegram_id: initData.telegram_id,
+        telegram_id: initData.telegramId,
         refreshFromSteam,
       });
       return skins;
     } catch {
       throw new UnauthorizedException('Failed to fetch skins');
     }
+  }
+
+  @Put('trade-url')
+  @UseGuards(TelegramInitDataGuard)
+  async updateTradeUrl(@Req() req: Request, @Body('tradeUrl') tradeUrl: string) {
+    const initData = req['initData'];
+    const user = await this.service.findByTelegramId(initData.telegramId);
+    if (!user) {
+      throw new UnauthorizedException('Foydalanuvchi topilmadi');
+    }
+    const updatedUser = await this.service.updateTradeUrl(user._id as Types.ObjectId, tradeUrl);
+    return updatedUser;
   }
 }
