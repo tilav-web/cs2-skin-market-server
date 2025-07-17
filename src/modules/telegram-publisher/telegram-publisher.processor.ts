@@ -38,7 +38,7 @@ export class TelegramPublisherProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<PublishSkinJobData | UpdateSkinStatusJobData>,
+    job: Job<PublishSkinJobData | UpdateSkinStatusJobData | CancelSaleJobData>,
   ): Promise<any> {
     this.logger.log(`Processing job ${job.name} with ID ${job.id}`);
     console.log(`[DEBUG] Processor job data:`, job.data);
@@ -151,7 +151,7 @@ export class TelegramPublisherProcessor extends WorkerHost {
         throw error;
       }
     } else if (job.name === 'delete-skin') {
-      const data = job.data as UpdateSkinStatusJobData; // Bu yerda DeleteSkinJobData bo'lishi kerak, lekin hozircha Update bilan ishlatamiz
+      const data = job.data as DeleteSkinJobData;
       try {
         await this.bot.api.deleteMessage(data.chatId, parseInt(data.messageId));
         this.logger.log(`Message ${data.messageId} deleted from Telegram.`);
