@@ -5,6 +5,7 @@ import {
   PublishSkinJobData,
   UpdateSkinStatusJobData,
   CancelSaleJobData,
+  DeleteSkinJobData,
 } from './telegram-publisher.service';
 import { Bot } from 'grammy';
 import { ConfigService } from '@nestjs/config';
