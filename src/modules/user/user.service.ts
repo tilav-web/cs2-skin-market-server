@@ -197,4 +197,8 @@ export class UserService {
     }
     return user;
   }
+
+  async updateUserStatus(telegramId: string, status: string): Promise<void> {
+    await this.model.updateOne({ telegram_id: telegramId }, { status });
+  }
 }

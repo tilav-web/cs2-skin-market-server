@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from '../user/user.schema';
 import { Bot, Context } from 'grammy';
 import { ConfigService } from '@nestjs/config';
+import { UserService } from '../user/user.service';
+import { myChatMemberEvent } from '../../common/my-chat-member-event';
 
 @Injectable()
 export class BotService implements OnModuleInit {
@@ -13,6 +15,7 @@ export class BotService implements OnModuleInit {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
+    private readonly userService: UserService,
   ) {
     const botToken = this.configService.get<string>('BOT_TOKEN');
     if (!botToken) {
@@ -32,6 +35,7 @@ export class BotService implements OnModuleInit {
   private registerCommands() {
     this.bot.command('start', (ctx) => this.handleStartCommand(ctx));
     this.bot.on('message:contact', (ctx) => this.handleContact(ctx));
+    myChatMemberEvent(this.bot, this.userService);
   }
 
   async handleStartCommand(ctx: Context) {

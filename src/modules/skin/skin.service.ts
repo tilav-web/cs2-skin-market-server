@@ -26,6 +26,12 @@ export class SkinService {
     const user = await this.userService.findByTelegramId(telegram_id);
     if (!user) throw new NotFoundException('User not found');
 
+    if (!user.trade_url || !user.trade_url.value || !user.trade_url.status) {
+      throw new BadRequestException(
+        'Sizning trade URL manzilingiz tasdiqlanmagan yoki mavjud emas. Iltimos, Trade URLni yangilang.',
+      );
+    }
+
     let objectIdSkinId: Types.ObjectId;
     try {
       objectIdSkinId = new Types.ObjectId(skinId);
@@ -115,17 +121,6 @@ export class SkinService {
     } else {
       expires_at = new Date(publish_at.getTime() + 2 * 60 * 1000);
     }
-
-    console.log('--- DEBUG: Values before findOneAndUpdate ---');
-    console.log('price:', price);
-    console.log('description:', description);
-    console.log('advertising:', advertising);
-    console.log('commission_rate:', commission_rate);
-    console.log('advertising_cost:', advertising_cost);
-    console.log('publish_at:', publish_at);
-    console.log('expires_at:', expires_at);
-    console.log('status (to be set):', 'pending');
-    console.log('------------------------------------------');
 
     const skin = await this.skinModel.findOneAndUpdate(
       { _id: objectIdSkinId, user: objectIdUserId },

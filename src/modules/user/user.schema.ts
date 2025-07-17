@@ -4,6 +4,12 @@ import { Document } from 'mongoose';
 export type UserDocument = User &
   Document & { createdAt: Date; updatedAt: Date };
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  NOT_ACTIVE = 'not_active',
+  BLOCK = 'block',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ default: null })
@@ -43,11 +49,12 @@ export class User {
   action: string;
 
   @Prop({
-    default: 'active',
-    enum: ['active', 'not_active', 'block'],
+    type: String,
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
     required: true,
   })
-  status: string;
+  status: UserStatus;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
