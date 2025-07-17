@@ -32,6 +32,12 @@ export class SkinService {
       );
     }
 
+    if (!user.phone) {
+      throw new BadRequestException(
+        'Sizning telefon raqamingiz tasdiqlanmagan. Iltimos, bot-ga start bosing va telefon raqamingizni yuboring.',
+      );
+    }
+
     let objectIdSkinId: Types.ObjectId;
     try {
       objectIdSkinId = new Types.ObjectId(skinId);
