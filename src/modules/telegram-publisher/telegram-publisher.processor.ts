@@ -72,7 +72,7 @@ export class TelegramPublisherProcessor extends WorkerHost {
                         ? 'TEKINGA OLING😊'
                         : `${skin.price} so'm`,
                     web_app: {
-                      url: `https://cs2.cashout.uz/skins/buy/${data.skinId}`,
+                      url: `${this.telegramBotUrl}/WebApp?startapp=skins_buy_${data.skinId}`,
                     },
                   },
                 ],
