@@ -71,7 +71,9 @@ export class TelegramPublisherProcessor extends WorkerHost {
                       skin.price === 0
                         ? 'TEKINGA OLING😊'
                         : `${skin.price} so'm`,
-                    url: `${this.telegramBotUrl}/WebApp=?startapp=skins_buy_${data.skinId}`,
+                    web_app: {
+                      url: `${process.env.CLIENT_URL}/skins/buy/${data.skinId}`,
+                    },
                   },
                 ],
               ],
