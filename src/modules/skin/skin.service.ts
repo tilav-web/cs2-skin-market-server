@@ -250,7 +250,7 @@ export class SkinService {
   }
 
   async findOnePublicById(id: string) {
-    const skin = await this.skinModel.findById(id);
+    const skin = await this.skinModel.findById(id).populate('user');
     if (!skin) throw new NotFoundException('Skin not found');
     return skin;
   }
