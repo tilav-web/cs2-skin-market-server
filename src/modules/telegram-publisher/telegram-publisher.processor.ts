@@ -129,27 +129,15 @@ export class TelegramPublisherProcessor extends WorkerHost {
         throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
       }
     } else if (job.name === 'cancel-sale-in-telegram') {
-      const data = job.data as UpdateSkinStatusJobData;
+      const data = job.data as CancelSaleJobData;
       try {
-        const skin = await this.skinModel.findById(data.skinId);
-        if (!skin) {
-          this.logger.warn(
-            `Skin with ID ${data.skinId} not found for canceling sale.`,
-          );
-          return;
-        }
-
-        const newCaption = `<s>${skin.market_hash_name} - ${skin.price} so'm</s>\n\n<b>❌ Sotuvdan olindi</b>`;
-
         await this.bot.api.editMessageCaption(
           data.chatId,
           parseInt(data.messageId),
           {
-            caption: newCaption,
+            caption: data.newCaption,
             parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [], // Tugmalarni olib tashlash
-            },
+            reply_markup: data.replyMarkup,
           },
         );
         this.logger.log(

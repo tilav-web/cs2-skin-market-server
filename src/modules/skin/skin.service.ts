@@ -307,8 +307,8 @@ export class SkinService {
     }
 
     // 3. Skin ma'lumotlarini asl holiga qaytaramiz
-    skin.status = 'not_listed'; // Yoki 'available_in_inventory' kabi status
-    skin.price = null;
+    skin.status = 'available';
+    skin.price = 0;
     skin.advertising = false;
     skin.message_id = null;
     skin.publish_at = null;
@@ -318,6 +318,18 @@ export class SkinService {
     skin.advertising_cost = null;
 
     await skin.save();
+
+    // Agar skin kanalga joylangan bo'lsa, uni tahrirlash
+    if (skin.message_id && process.env.TELEGRAM_CHANNEL_ID) {
+      // 1. Postni o'zgartirish vazifasini navbatga qo'shamiz
+      await this.telegramPublisherService.addCancelSaleJob(skin);
+
+      // 2. Foydalanuvchiga xabar yuboramiz
+      await this.telegramPublisherService.sendCancellationNoticeToUser(
+        telegram_id,
+        skin,
+      );
+    }
 
     return skin;
   }

@@ -24,6 +24,14 @@ export interface DeleteSkinJobData {
   chatId: string;
 }
 
+export interface CancelSaleJobData {
+  skinId: string;
+  messageId: string;
+  chatId: string;
+  newCaption: string;
+  replyMarkup: InlineKeyboard;
+}
+
 @Injectable()
 export class TelegramPublisherService {
   private readonly bot: Bot;
@@ -122,10 +130,15 @@ ${descriptionBlock}
   }
 
   async addCancelSaleJob(skin: SkinDocument) {
-    const jobData: UpdateSkinStatusJobData = {
+    const newCaption = `<b>Skin sotuvdan olib tashlandi:</b>\n<b>${skin.market_hash_name}</b>\n\n<i>Bu skin endi sotuvda mavjud emas.</i>`;
+    const emptyKeyboard = new InlineKeyboard();
+
+    const jobData: CancelSaleJobData = {
       skinId: skin._id.toString(),
       messageId: skin.message_id,
       chatId: process.env.TELEGRAM_CHANNEL_ID || '',
+      newCaption: newCaption,
+      replyMarkup: emptyKeyboard,
     };
     await this.telegramQueue.add('cancel-sale-in-telegram', jobData, {
       removeOnComplete: true,
