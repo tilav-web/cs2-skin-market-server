@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document } from 'mongoose';
 
-export type UserDocument = User & Document & { createdAt: Date; updatedAt: Date };
+export type UserDocument = User &
+  Document & { createdAt: Date; updatedAt: Date };
 
 @Schema({ timestamps: true })
 export class User {
@@ -26,8 +27,16 @@ export class User {
   @Prop({ default: null })
   personaname: string; // Steam foydalanuvchi nomi (UI uchun)
 
-  @Prop({ default: null })
-  trade_url: string; // Steam autentifikatsiya tokeni
+  @Prop({
+    default: {
+      value: null,
+      status: false,
+    },
+  })
+  trade_url: {
+    value: string; // Foydalanuvchining savdo URL manzili
+    status: boolean; // Savdo URL manzilining holati
+  }; // Steam autentifikatsiya tokeni
 
   @Prop({ default: null })
   action: string;

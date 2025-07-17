@@ -186,7 +186,11 @@ export class UserService {
     tradeUrl: string,
   ): Promise<UserDocument> {
     const user = await this.model
-      .findByIdAndUpdate(userId, { trade_url: tradeUrl }, { new: true })
+      .findByIdAndUpdate(
+        userId,
+        { trade_url: { value: tradeUrl, status: true } },
+        { new: true },
+      )
       .exec();
     if (!user) {
       throw new UnauthorizedException('Foydalanuvchi topilmadi');
