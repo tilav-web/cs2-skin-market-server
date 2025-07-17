@@ -1,6 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
-import { User } from '../user/user.schema';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type SkinDocument = Skin & Document;
 
@@ -28,7 +27,7 @@ export class Skin {
   price: number; // Skinning narxi (foydalanuvchi tomonidan kiritilgan)
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
-  user: User; // Skin egasi (User schemasiga reference)
+  user: Types.ObjectId; // Skin egasi (User schemasiga reference)
 
   @Prop({ default: false })
   advertising: boolean;
@@ -40,7 +39,7 @@ export class Skin {
   status: string; // Skinning holati: mavjud, kutilmoqda, sotilgan yoki bekor qilingan
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', default: null })
-  buyer: User; // Skinni sotib olgan foydalanuvchi (agar sotilgan bo‘lsa)
+  buyer: Types.ObjectId; // Skinni sotib olgan foydalanuvchi (agar sotilgan bo‘lsa)
 
   @Prop({ default: null })
   message_id: string; // telegram post taxrirlsh uchun

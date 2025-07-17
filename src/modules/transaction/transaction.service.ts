@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Transaction, TransactionDocument } from './transaction.schema';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { User, UserDocument } from '../user/user.schema';
@@ -21,50 +21,144 @@ export class TransactionService {
     private readonly telegramPublisherService: TelegramPublisherService,
   ) {}
 
-  async buySkin(buyerId: string, skinId: string): Promise<Transaction> {
-    const buyer = await this.userModel.findById(buyerId);
-    if (!buyer) {
-      throw new NotFoundException('Buyer not found');
+  async buySkin(
+    buyerTelegramId: string,
+    skinId: string,
+  ): Promise<TransactionDocument> {
+    const session = await this.transactionModel.db.startSession();
+    session.startTransaction();
+
+    try {
+      const buyer = await this.userModel
+        .findOne({ telegram_id: buyerTelegramId })
+        .session(session);
+      if (!buyer) {
+        throw new NotFoundException('Xaridor topilmadi');
+      }
+
+      const skin = await this.skinModel
+        .findById(skinId)
+        .populate('user')
+        .session(session);
+      if (!skin) {
+        throw new NotFoundException('Skin topilmadi');
+      }
+      const seller = skin.user as unknown as UserDocument;
+
+      // 1. Tekshiruvlar
+      if (skin.status !== 'pending') {
+        throw new BadRequestException('Ushbu skin sotuvda emas');
+      }
+      if (buyer.balance < skin.price) {
+        throw new BadRequestException(
+          "Balansingizda mablag' yetarli emas. Iltimos, hisobingizni to'ldiring.",
+        );
+      }
+      if ((buyer._id as Types.ObjectId).equals(seller._id as Types.ObjectId)) {
+        throw new BadRequestException(
+          "O'zingizning skiningizni sotib ololmaysiz",
+        );
+      }
+
+      // 2. Xaridor va sotuvchi ma'lumotlarini tekshirish
+      const buyerValidation = this.validateUser(buyer);
+      if (!buyerValidation.valid) {
+        if (buyerValidation.field === 'trade_url') {
+          buyer.trade_url.status = false;
+          await buyer.save({ session });
+        }
+        throw new BadRequestException(
+          `Xatolik (Xaridor): ${buyerValidation.message}`,
+        );
+      }
+
+      const sellerValidation = this.validateUser(seller);
+      if (!sellerValidation.valid) {
+        if (sellerValidation.field === 'trade_url') {
+          seller.trade_url.status = false;
+          await seller.save({ session });
+        }
+        // Sotuvchiga xabar yuborish
+        await this.telegramPublisherService.sendPurchaseFailedNotificationToSeller(
+          seller.telegram_id,
+          buyer.personaname,
+          skin.market_hash_name,
+          sellerValidation.message,
+        );
+        throw new BadRequestException(
+          `Sotuvchi bilan bog'liq muammo tufayli xaridni amalga oshirib bo'lmadi.`,
+        );
+      }
+
+      // 3. Muvaffaqiyatli xarid amallari
+      const commissionAmount = skin.price * (skin.commission_rate || 0.05);
+      const sellerRevenue = skin.price - commissionAmount;
+
+      // Balanslarni yangilash
+      buyer.balance -= skin.price;
+      seller.balance += sellerRevenue;
+
+      // Skin ma'lumotlarini yangilash
+      skin.status = 'sold';
+      skin.user = buyer._id as Types.ObjectId; // Egalik huquqini o'tkazish
+      skin.buyer = buyer._id as Types.ObjectId;
+      skin.advertising = false;
+      skin.commission_amount = commissionAmount;
+      skin.seller_revenue = sellerRevenue;
+
+      // Tranzaksiya yaratish
+      const transaction = new this.transactionModel({
+        user: seller._id,
+        receiver: buyer._id,
+        amount: skin.price,
+        type: 'sale',
+        state: 'completed',
+        skin: skin._id,
+        description: `${seller.personaname} dan ${buyer.personaname} ga skin sotildi`,
+      });
+
+      await buyer.save({ session });
+      await seller.save({ session });
+      await skin.save({ session });
+      const savedTransaction = await transaction.save({ session });
+
+      // Telegram postini yangilash
+      if (skin.message_id) {
+        await this.telegramPublisherService.addUpdateSkinStatusJob(
+          skin,
+          buyer.personaname,
+        );
+      }
+
+      await session.commitTransaction();
+      return savedTransaction;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-    const skin = await this.skinModel.findById(skinId).populate('user');
-    if (!skin) {
-      throw new NotFoundException('Skin not found');
+  }
+
+  private validateUser(user: UserDocument): {
+    valid: boolean;
+    message?: string;
+    field?: string;
+  } {
+    if (!user.steam_id) {
+      return { valid: false, message: 'Steam akkaunt bog‘lanmagan.' };
     }
-    if (skin.status !== 'available') {
-      throw new BadRequestException('Skin is not available for sale');
+    if (!user.phone) {
+      return { valid: false, message: 'Telefon raqam tasdiqlanmagan.' };
     }
-    if (buyer.balance < skin.price) {
-      throw new BadRequestException('Insufficient balance');
+    if (!user.trade_url || !user.trade_url.value) {
+      return {
+        valid: false,
+        message: 'Trade URL manzili kiritilmagan.',
+        field: 'trade_url',
+      };
     }
-    const seller = skin.user as UserDocument;
-    const commissionAmount = skin.price * skin.commission_rate;
-    const sellerRevenue = skin.price - commissionAmount;
-    // Update balances
-    buyer.balance -= skin.price;
-    seller.balance += sellerRevenue;
-    // Update skin
-    skin.status = 'sold';
-    skin.buyer = buyer;
-    skin.commission_amount = commissionAmount;
-    skin.seller_revenue = sellerRevenue;
-    // Create transaction
-    const transaction = new this.transactionModel({
-      type: 'sale',
-      amount: skin.price,
-      skin: skin._id,
-      owner: seller._id,
-      receiver: buyer._id,
-    });
-    // Save everything in a session for atomicity (optional but recommended)
-    await buyer.save();
-    await seller.save();
-    await skin.save();
-    const savedTransaction = await transaction.save();
-    // Update Telegram post
-    if (skin.message_id) {
-      await this.telegramPublisherService.addUpdateSkinStatusJob(skin);
-    }
-    return savedTransaction;
+    return { valid: true };
   }
 
   async create(

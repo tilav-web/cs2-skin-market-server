@@ -39,11 +39,13 @@ export class TelegramPublisherProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<PublishSkinJobData | UpdateSkinStatusJobData | CancelSaleJobData>,
+    job: Job<
+      | PublishSkinJobData
+      | UpdateSkinStatusJobData
+      | CancelSaleJobData
+      | DeleteSkinJobData
+    >,
   ): Promise<any> {
-    this.logger.log(`Processing job ${job.name} with ID ${job.id}`);
-    console.log(`[DEBUG] Processor job data:`, job.data);
-
     if (job.name === 'publish-skin') {
       const data = job.data as PublishSkinJobData;
       try {
@@ -80,10 +82,6 @@ export class TelegramPublisherProcessor extends WorkerHost {
         await this.skinModel.findByIdAndUpdate(data.skinId, {
           message_id: message.message_id.toString(),
         });
-
-        this.logger.log(
-          `Skin ${data.skinId} published to Telegram. Message ID: ${message.message_id} saved.`,
-        );
         return message.message_id;
       } catch (error) {
         this.logger.error(
@@ -106,19 +104,25 @@ export class TelegramPublisherProcessor extends WorkerHost {
 
         let newCaption = '';
         if (skin.status === 'sold') {
-          newCaption = `✅ SOTILDI ✅\n\n<s>${skin.market_hash_name} - ${skin.price} tilav</s>`;
+          newCaption = `✅ SOTILDI ✅\n\n<s>${skin.market_hash_name} - ${skin.price} tilav</s>\n\n👤 Xaridor: ${data.buyerPersonaname}`;
         } else {
           // Boshqa statuslar uchun ham matnni o'zgartirish mumkin
           // Hozircha faqat 'sold' holati uchun o'zgartiramiz
           newCaption = `Yangi skin sotuvda: ${skin.market_hash_name} - ${skin.price} tilav`;
         }
-
         await this.bot.api.editMessageCaption(
           data.chatId,
           parseInt(data.messageId),
           {
             caption: newCaption,
             parse_mode: 'HTML',
+          },
+        );
+        await this.bot.api.editMessageReplyMarkup(
+          data.chatId,
+          parseInt(data.messageId),
+          {
+            reply_markup: { inline_keyboard: [] },
           },
         );
         this.logger.log(

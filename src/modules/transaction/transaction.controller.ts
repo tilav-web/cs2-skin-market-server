@@ -17,10 +17,11 @@ import { Request } from 'express';
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
-  @Post()
+  @Post('buy/:skinId')
   @UseGuards(TelegramInitDataGuard)
-  create(@Body() createTransactionDto: CreateTransactionDto) {
-    return this.transactionService.create(createTransactionDto);
+  async buySkin(@Req() req: Request, @Param('skinId') skinId: string) {
+    const initData = req['initData'];
+    return this.transactionService.buySkin(initData.telegram_id, skinId);
   }
 
   @Get()

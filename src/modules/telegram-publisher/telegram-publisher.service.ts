@@ -17,6 +17,7 @@ export interface UpdateSkinStatusJobData {
   skinId: string;
   messageId: string;
   chatId: string;
+  buyerPersonaname: string; // Yangi maydon
 }
 
 export interface DeleteSkinJobData {
@@ -105,11 +106,12 @@ ${descriptionBlock}
     });
   }
 
-  async addUpdateSkinStatusJob(skin: SkinDocument) {
+  async addUpdateSkinStatusJob(skin: SkinDocument, buyerPersonaname: string) {
     const jobData: UpdateSkinStatusJobData = {
       skinId: skin._id.toString(),
       messageId: skin.message_id,
       chatId: process.env.TELEGRAM_CHANNEL_ID || '',
+      buyerPersonaname,
     };
     await this.telegramQueue.add('update-skin-status', jobData, {
       removeOnComplete: true,
@@ -244,6 +246,31 @@ Telegram kanaliga joylash vaqti: <b>${formattedPublishAt}</b>
     } catch (error) {
       console.error(
         `Telegram xabarini tahrirlashda xatolik ${messageId}: ${error.message}`,
+      );
+    }
+  }
+
+  async sendPurchaseFailedNotificationToSeller(
+    telegramId: string,
+    buyerPersonaname: string,
+    skinName: string,
+    reason: string,
+  ) {
+    const message = `❗️ Xarid amalga oshmadi
+
+Foydalanuvchi <b>${buyerPersonaname}</b> sizning "<b>${skinName}</b>" skiningizni sotib olmoqchi edi, ammo quyidagi muammo tufayli xarid bekor qilindi:
+
+Sabab: <b>${reason}</b>
+
+Iltimos, profilingizdagi ma'lumotlarni to'g'rilab qo'ying.`;
+
+    try {
+      await this.bot.api.sendMessage(telegramId, message, {
+        parse_mode: 'HTML',
+      });
+    } catch (error) {
+      console.error(
+        `Sotuvchiga xatolik haqida xabar yuborishda xatolik ${telegramId}: ${error.message}`,
       );
     }
   }
