@@ -28,6 +28,7 @@ export class User {
   personaname: string; // Steam foydalanuvchi nomi (UI uchun)
 
   @Prop({
+    type: Object,
     default: {
       value: null,
       status: false,
