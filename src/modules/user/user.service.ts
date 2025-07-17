@@ -188,7 +188,7 @@ export class UserService {
     const user = await this.model
       .findByIdAndUpdate(
         userId,
-        { trade_url: { value: tradeUrl, status: true } },
+        { $set: { 'trade_url.value': tradeUrl, 'trade_url.status': true } },
         { new: true },
       )
       .exec();
