@@ -21,8 +21,21 @@ const clickCheckToken = (data: SignatureData, signString: string): boolean => {
     sign_time,
   } = data;
   const CLICK_SECRET_KEY = process.env.CLICK_SECRET_KEY;
-  const prepareId = merchant_prepare_id || '';
-  const signature = `${click_trans_id}${service_id}${CLICK_SECRET_KEY}${orderId}${prepareId}${amount}${action}${sign_time}`;
+
+  let signature: string;
+  if (parseInt(action) === 0) {
+    // Prepare so‘rovi
+    signature = `${click_trans_id}${service_id}${CLICK_SECRET_KEY}${orderId}${amount}${action}${sign_time}`;
+  } else if (parseInt(action) === 1) {
+    // Complete so‘rovi
+    if (!merchant_prepare_id) {
+      return false; // merchant_prepare_id majburiy
+    }
+    signature = `${click_trans_id}${service_id}${CLICK_SECRET_KEY}${orderId}${merchant_prepare_id}${amount}${action}${sign_time}`;
+  } else {
+    return false; // Noto‘g‘ri action
+  }
+
   const signatureHash = md5(signature);
   return signatureHash === signString;
 };

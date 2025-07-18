@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../user/user.schema';
-import { Skin } from '../skin/skin.schema'; // Skin modelini import qilamiz
-import { TransactionState } from '../click/click.constants'; // Import TransactionState
+import { Skin } from '../skin/skin.schema';
+import { TransactionState } from '../click/click.constants';
 
 export type TransactionDocument = Transaction & Document;
 
@@ -11,50 +11,58 @@ export enum TransactionType {
   WITHDRAW = 'withdraw', // Pul yechish
   SALE = 'sale', // Skin sotish
   BONUS = 'bonus', // Bonus yoki reklama mablag‘lari
-  BUY = 'buy', // skin sotib olish
+  BUY = 'buy', // Skin sotib olish
 }
 
-@Schema({ timestamps: true })
+@Schema()
 export class Transaction {
   @Prop({ required: true, ref: User.name })
-  user: Types.ObjectId; // Tranzaksiyani boshlagan/ishtirok etgan foydalanuvchi (depozitor, xaridor, sotuvchi)
+  user: Types.ObjectId; // Tranzaksiyani boshlagan foydalanuvchi (depozitor, xaridor, sotuvchi)
 
-  @Prop({ ref: User.name, default: null }) // Skin/pulni qabul qiluvchi (agar o'tkazma bo'lsa)
+  @Prop({ ref: User.name, default: null }) // Pul/skin qabul qiluvchi (o‘tkazma bo‘lsa)
   receiver: Types.ObjectId;
 
-  @Prop({ required: true })
-  amount: number;
+  @Prop({ required: true, min: 0 }) // Manfiy bo‘lmasligi uchun validatsiya
+  amount: string;
 
   @Prop({ required: true, enum: TransactionType })
   type: TransactionType;
 
-  @Prop({ default: TransactionState.Pending, enum: TransactionState })
+  @Prop({
+    required: true,
+    enum: TransactionState,
+    default: TransactionState.Pending,
+  })
   state: TransactionState;
 
-  @Prop({ type: Types.ObjectId, ref: Skin.name, default: null }) // BUY/SALE tranzaksiyalari uchun skinga murojaat
+  @Prop({ type: Types.ObjectId, ref: Skin.name, default: null }) // BUY/SALE uchun
   skin: Types.ObjectId;
 
   @Prop({ default: null })
-  description: string; // Qo'shimcha ma'lumot yoki izoh
+  description: string; // Qo‘shimcha izoh
 
-  // Click.uz specific fields (bular faqat DEPOSIT turidagi Click.uz tranzaksiyalari uchun ishlatiladi)
-  @Prop({ unique: true, sparse: true }) // click_trans_id for Click.uz
+  // CLICK API uchun maxsus maydonlar
+  @Prop({ unique: true, sparse: true }) // click_trans_id, faqat CLICK uchun
   id: string;
 
-  @Prop()
+  @Prop({ default: null }) // Tranzaksiya yaratilgan vaqt (Unix timestamp)
   create_time: number;
 
-  @Prop()
+  @Prop({ default: null }) // Prepare bosqichi IDsi
   prepare_id: number;
 
-  @Prop()
+  @Prop({ default: null }) // To‘lov amalga oshirilgan vaqt
   perform_time: number;
 
-  @Prop()
+  @Prop({ default: null }) // Bekor qilingan vaqt
   cancel_time: number;
 
-  @Prop({ default: 'manual' }) // 'click' for Click.uz deposits, 'manual' or 'system' for others
+  @Prop({ default: 'manual', enum: ['click', 'manual', 'system'] }) // To‘lov provayderi
   provider: string;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
+
+// Indekslar qo‘shish (optimallashtirish uchun)
+TransactionSchema.index({ id: 1, provider: 1 }, { unique: true, sparse: true });
+TransactionSchema.index({ user: 1, state: 1 });

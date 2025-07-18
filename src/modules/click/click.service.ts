@@ -31,16 +31,16 @@ export class ClickService {
       sign_string,
     } = data;
 
-    const telegramId = merchant_trans_id; // merchant_trans_id bu yerda foydalanuvchi telegram_id
+    const telegramId = merchant_trans_id;
 
     const signatureData = {
       click_trans_id,
       service_id,
-      orderId: String(telegramId),
+      orderId: telegramId,
       amount,
       action,
       sign_time,
-    }; // orderId o'rniga telegramId ishlatamiz
+    };
 
     const checkSignature = clickCheckToken(signatureData, sign_string);
     if (!checkSignature) {
@@ -54,7 +54,7 @@ export class ClickService {
       };
     }
 
-    const user = await this.userService.findByTelegramId(telegramId); // findById o'rniga findByTelegramId ishlatamiz
+    const user = await this.userService.findByTelegramId(telegramId);
     if (!user) {
       return { error: ClickError.UserNotFound, error_note: 'User not found' };
     }
@@ -62,26 +62,27 @@ export class ClickService {
     const existingTransaction = await this.transactionModel.findOne({
       id: click_trans_id,
       provider: 'click',
+      user: user._id,
     });
-    if (existingTransaction) {
-      if (
-        existingTransaction.state === TransactionState.Pending ||
-        existingTransaction.state === TransactionState.Paid
-      ) {
-        return {
-          error: ClickError.AlreadyPaid,
-          error_note:
-            'Transaction with this click_trans_id already exists and is not canceled',
-        };
-      }
+    if (
+      existingTransaction &&
+      [TransactionState.Pending, TransactionState.Paid].includes(
+        existingTransaction.state,
+      )
+    ) {
+      return {
+        error: ClickError.AlreadyPaid,
+        error_note:
+          'Transaction with this click_trans_id already exists and is not canceled',
+      };
     }
 
     const time = new Date().getTime();
 
     const newTransaction = await this.transactionModel.create({
       id: click_trans_id,
-      user: user._id, // Foydalanuvchi ID'si (MongoDB ObjectId)
-      amount: parseFloat(amount),
+      user: user._id,
+      amount: amount, // Keep as string
       state: TransactionState.Pending,
       create_time: time,
       prepare_id: time,
@@ -91,124 +92,138 @@ export class ClickService {
 
     return {
       click_trans_id,
-      merchant_trans_id: newTransaction._id, // Yangi yaratilgan tranzaksiya ID'sini qaytaramiz
-      merchant_prepare_id: time,
+      merchant_trans_id: telegramId,
+      merchant_prepare_id: newTransaction._id.toString(), // Use transaction _id as merchant_prepare_id
       error: ClickError.Success,
       error_note: 'Success',
     };
   }
 
   async complete(data: any) {
-    const {
-      click_trans_id,
-      service_id,
-      merchant_trans_id,
-      merchant_prepare_id,
-      amount,
-      action,
-      sign_time,
-      sign_string,
-      error,
-    } = data;
+    const session = await this.transactionModel.db.startSession();
+    session.startTransaction();
+    try {
+      const {
+        click_trans_id,
+        service_id,
+        merchant_trans_id,
+        merchant_prepare_id,
+        amount,
+        action,
+        sign_time,
+        sign_string,
+        error,
+      } = data;
 
-    const transactionId = merchant_trans_id;
+      const telegramId = merchant_trans_id;
 
-    const order = await this.transactionModel.findById(transactionId);
+      const order = await this.transactionModel
+        .findOne({
+          id: click_trans_id,
+          provider: 'click',
+        })
+        .session(session);
 
-    if (!order) {
-      return {
-        error: ClickError.TransactionNotFound,
-        error_note: 'Transaction not found',
+      if (!order || order.type !== TransactionType.DEPOSIT) {
+        await session.abortTransaction();
+        return {
+          error: ClickError.TransactionNotFound,
+          error_note: 'Transaction not found or invalid type',
+        };
+      }
+
+      const user = await this.userModel.findById(order.user).session(session);
+      if (!user) {
+        await session.abortTransaction();
+        return { error: ClickError.UserNotFound, error_note: 'User not found' };
+      }
+
+      // Keep amount as string for signature verification
+      const signatureData = {
+        click_trans_id,
+        service_id,
+        orderId: telegramId,
+        merchant_prepare_id,
+        amount: amount.toString(), // Ensure amount is a string for clickCheckToken
+        action,
+        sign_time,
       };
-    }
 
-    const userId = order.user;
-    const orderId = order._id;
+      if (!clickCheckToken(signatureData, sign_string)) {
+        await session.abortTransaction();
+        return { error: ClickError.SignFailed, error_note: 'Invalid sign' };
+      }
 
-    const signatureData = {
-      click_trans_id,
-      service_id,
-      orderId: orderId.toString(),
-      merchant_prepare_id,
-      amount,
-      action,
-      sign_time,
-    };
+      if (parseInt(action) !== ClickAction.Complete) {
+        await session.abortTransaction();
+        return {
+          error: ClickError.ActionNotFound,
+          error_note: 'Action not found',
+        };
+      }
 
-    const checkSignature = clickCheckToken(signatureData, sign_string);
+      // Check merchant_prepare_id against transaction _id
+      if (order._id.toString() !== merchant_prepare_id) {
+        await session.abortTransaction();
+        return {
+          error: ClickError.TransactionNotFound,
+          error_note: 'Transaction not found or not prepared',
+        };
+      }
 
-    if (!checkSignature) {
-      return { error: ClickError.SignFailed, error_note: 'Invalid sign' };
-    }
+      if (order.state === TransactionState.Paid) {
+        return {
+          error: ClickError.AlreadyPaid,
+          error_note: 'Transaction already paid',
+        };
+      }
 
-    if (parseInt(action) !== ClickAction.Complete) {
-      return {
-        error: ClickError.ActionNotFound,
-        error_note: 'Action not found',
-      };
-    }
+      // Compare amounts
+      if (amount !== order.amount) {
+        await session.abortTransaction();
+        return {
+          error: ClickError.InvalidAmount,
+          error_note: 'Incorrect parameter amount',
+        };
+      }
 
-    const user = await this.userModel.findById(userId);
-    if (!user) {
-      return { error: ClickError.UserNotFound, error_note: 'User not found' };
-    }
+      const time = new Date().getTime();
 
-    const isPrepared = await this.transactionModel.findOne({
-      prepare_id: merchant_prepare_id,
-      provider: 'click',
-      _id: orderId,
-    });
-    if (!isPrepared) {
-      return {
-        error: ClickError.TransactionNotFound,
-        error_note: 'Transaction not found or not prepared',
-      };
-    }
+      if (error < 0) {
+        order.state = TransactionState.PendingCanceled;
+        order.cancel_time = time;
+        await order.save({ session });
 
-    if (isPrepared.state === TransactionState.Paid) {
-      return {
-        error: ClickError.AlreadyPaid,
-        error_note: 'Transaction already paid',
-      };
-    }
+        await session.commitTransaction();
+        return {
+          click_trans_id,
+          merchant_trans_id: telegramId,
+          merchant_confirm_id: time,
+          error: ClickError.TransactionCanceled,
+          error_note: 'Transaction canceled',
+        };
+      }
 
-    if (parseFloat(amount) !== isPrepared.amount) {
-      return {
-        error: ClickError.InvalidAmount,
-        error_note: 'Incorrect parameter amount',
-      };
-    }
+      user.balance = (user.balance || 0) + parseFloat(amount);
+      await user.save({ session });
 
-    const time = new Date().getTime();
+      order.state = TransactionState.Paid;
+      order.perform_time = time;
+      await order.save({ session });
 
-    if (error < 0) {
-      await this.transactionModel.findOneAndUpdate(
-        { _id: orderId },
-        { state: TransactionState.PendingCanceled, cancel_time: time },
-      );
+      await session.commitTransaction();
       return {
         click_trans_id,
-        merchant_trans_id: orderId,
+        merchant_trans_id: telegramId,
         merchant_confirm_id: time,
-        error: ClickError.TransactionCanceled,
-        error_note: 'Transaction canceled',
+        error: ClickError.Success,
+        error_note: 'Success',
       };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    user.balance = (user.balance || 0) + parseFloat(amount);
-    await user.save();
-
-    await this.transactionModel.findOneAndUpdate(
-      { _id: orderId },
-      { state: TransactionState.Paid, perform_time: time },
-    );
-
-    return {
-      click_trans_id,
-      merchant_trans_id: orderId,
-      merchant_confirm_id: time,
-      error: ClickError.Success,
-      error_note: 'Success',
-    };
   }
 }

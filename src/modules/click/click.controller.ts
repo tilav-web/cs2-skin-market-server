@@ -12,13 +12,20 @@ import { ClickService } from './click.service';
 import { Response, Request } from 'express';
 import { TelegramInitDataGuard } from '../user/guards/telegram-initdata.guard';
 import { ClickDto } from './dto/click.dto';
+import { IsNumber, Min } from 'class-validator';
+
+class InitiateDepositDto {
+  @IsNumber()
+  @Min(1000)
+  amount: number;
+}
 
 @Controller('click')
 export class ClickController {
   constructor(private readonly clickService: ClickService) {}
 
   @Post('prepare')
-  async prepare(@Body() data: any, @Res() res: Response) {
+  async prepare(@Body() data: ClickDto, @Res() res: Response) {
     try {
       const result = await this.clickService.prepare(data);
       res
@@ -27,18 +34,13 @@ export class ClickController {
         })
         .send(result);
     } catch (error) {
-      console.log(error);
-      // NestJS da xatolar odatda Exception Filter tomonidan boshqariladi.
-      // Bu yerda to'g'ridan-to'g'ri javob qaytarish o'rniga, xatoni tashlash yaxshiroq.
-      // throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
-      // Yoki Click.uz ga mos xato javobini qaytarish:
       res
         .set({
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         })
         .send({
-          error: -1, // Umumiy xato kodi
-          error_note: 'Server error',
+          error: error.response?.error || -1,
+          error_note: error.response?.error_note || 'Server xatosi',
         });
     }
   }
@@ -53,48 +55,61 @@ export class ClickController {
         })
         .send(result);
     } catch (error) {
-      console.log(error);
       res
         .set({
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         })
         .send({
-          error: -1, // Umumiy xato kodi
-          error_note: 'Server error',
+          error: error.response?.error || -1,
+          error_note: error.response?.error_note || 'Server xatosi',
         });
     }
   }
 
   @Post('initiate-deposit')
-  @UseGuards(TelegramInitDataGuard) // TelegramInitDataGuard ni qo'shamiz
+  @UseGuards(TelegramInitDataGuard)
   async initiateDeposit(
-    @Body('amount') amount: number,
+    @Body() body: InitiateDepositDto,
     @Res() res: Response,
-    @Req() req: Request, // Request ob'ektini olamiz
+    @Req() req: Request,
   ) {
+    const { amount } = body;
     const CLICK_SERVICE_ID = process.env.CLICK_SERVICE_ID;
     const TELEGRAM_BOT_URL = process.env.TELEGRAM_BOT_URL;
     const CLICK_MERCHANT_ID = process.env.CLICK_MERCHANT_ID;
     const CLICK_CHECKOUT_LINK = process.env.CLICK_CHECKOUT_LINK;
 
-    // Foydalanuvchi ID'sini req.initData.telegram_id dan olamiz
-    const userId = req['initData'].telegram_id;
+    const telegramId = req['initData']?.telegram_id;
+    if (!telegramId) {
+      throw new HttpException(
+        'Foydalanuvchi ID topilmadi',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
-    if (!userId) {
-      // Agar userId topilmasa, xato qaytaramiz
-      throw new HttpException('User ID not found', HttpStatus.BAD_REQUEST);
+    if (
+      !CLICK_SERVICE_ID ||
+      !CLICK_MERCHANT_ID ||
+      !CLICK_CHECKOUT_LINK ||
+      !TELEGRAM_BOT_URL
+    ) {
+      throw new HttpException(
+        'Mu hit sozlamalari noto‘g‘ri',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
 
     const params = new URLSearchParams();
     params.append('service_id', CLICK_SERVICE_ID);
     params.append('merchant_id', CLICK_MERCHANT_ID);
-    params.append('amount', amount.toString());
-    params.append('transaction_param', userId);
-    params.append('return_url', `${TELEGRAM_BOT_URL}/WebApp=?startapp=profile`);
+    params.append('amount', amount.toFixed(2));
+    params.append('transaction_param', telegramId);
+    params.append(
+      'return_url',
+      encodeURI(`${TELEGRAM_BOT_URL}/WebApp=?startapp=profile`),
+    );
 
     const paymentUrl = `${CLICK_CHECKOUT_LINK}?${params.toString()}`;
-    console.log(paymentUrl);
-
     res.status(HttpStatus.OK).json({ payment_url: paymentUrl });
   }
 }
