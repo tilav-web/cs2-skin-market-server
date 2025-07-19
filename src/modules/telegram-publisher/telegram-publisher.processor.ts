@@ -6,12 +6,19 @@ import {
   UpdateSkinStatusJobData,
   CancelSaleJobData,
   DeleteSkinJobData,
+  CheckTradeOfferStatusJobData,
 } from './telegram-publisher.service';
 import { Bot } from 'grammy';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Skin, SkinDocument } from '../skin/skin.schema';
+import { SteamService } from '../steam/steam.service';
+import { Transaction, TransactionDocument } from '../transaction/transaction.schema';
+import { TransactionState } from '../click/click.constants';
+import { User, UserDocument } from '../user/user.schema';
+import TradeOfferManager from 'steam-tradeoffer-manager';
+import { InlineKeyboard } from 'grammy';
 
 @Processor('telegram-publisher')
 export class TelegramPublisherProcessor extends WorkerHost {
@@ -22,6 +29,9 @@ export class TelegramPublisherProcessor extends WorkerHost {
   constructor(
     private configService: ConfigService,
     @InjectModel(Skin.name) private skinModel: Model<SkinDocument>,
+    @InjectModel(Transaction.name) private transactionModel: Model<TransactionDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly steamService: SteamService,
   ) {
     super();
     const botToken = this.configService.get<string>('BOT_TOKEN');
@@ -118,13 +128,21 @@ export class TelegramPublisherProcessor extends WorkerHost {
             parse_mode: 'HTML',
           },
         );
-        await this.bot.api.editMessageReplyMarkup(
-          data.chatId,
-          parseInt(data.messageId),
-          {
-            reply_markup: { inline_keyboard: [] },
-          },
-        );
+        try {
+          await this.bot.api.editMessageReplyMarkup(
+            data.chatId,
+            parseInt(data.messageId),
+            {
+              reply_markup: { inline_keyboard: [] },
+            },
+          );
+        } catch (error) {
+          if (error.message && error.message.includes('message is not modified')) {
+            this.logger.warn(`Message ${data.messageId} reply markup already updated or not modified.`);
+          } else {
+            throw error; // Boshqa xatoliklarni qayta tashlash
+          }
+        }
         this.logger.log(
           `Message ${data.messageId} caption updated in Telegram.`,
         );
@@ -163,6 +181,123 @@ export class TelegramPublisherProcessor extends WorkerHost {
       } catch (error) {
         this.logger.error(
           `Failed to delete message ${data.messageId}: ${error.message}`,
+        );
+        throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
+      }
+    } else if (job.name === 'check-trade-offer-status') {
+      const data = job.data as unknown as CheckTradeOfferStatusJobData;
+      try {
+        const transaction = await this.transactionModel.findById(data.transactionId);
+        if (!transaction) {
+          this.logger.warn(`Transaction with ID ${data.transactionId} not found for trade offer status check.`);
+          return;
+        }
+
+        const tradeOfferStatus = await this.steamService.getTradeOfferStatus(data.tradeOfferId);
+
+        if (tradeOfferStatus.state === TradeOfferManager.ETradeOfferState.Accepted) {
+          // Trade offer qabul qilindi
+          transaction.state = TransactionState.Paid;
+          await transaction.save();
+
+          const skin = await this.skinModel.findById(transaction.skin);
+          if (skin && skin.message_id) {
+            // Telegramdagi skin e'lonini yangilash
+            const buyer = await this.userModel.findById(transaction.receiver);
+            if (buyer) {
+              let newCaption = `✅ SOTILDI ✅\n\n<s>${skin.market_hash_name} - ${skin.price} tilav</s>\n\n👤 Xaridor: ${buyer.personaname}`;
+              await this.bot.api.editMessageCaption(
+                this.configService.get<string>('TELEGRAM_CHANNEL_ID'),
+                parseInt(skin.message_id),
+                {
+                  caption: newCaption,
+                  parse_mode: 'HTML',
+                },
+              );
+              try {
+                await this.bot.api.editMessageReplyMarkup(
+                  this.configService.get<string>('TELEGRAM_CHANNEL_ID'),
+                  parseInt(skin.message_id),
+                  {
+                    reply_markup: { inline_keyboard: [] },
+                  },
+                );
+              } catch (error) {
+                if (error.message && error.message.includes('message is not modified')) {
+                  this.logger.warn(`Message ${skin.message_id} reply markup already updated or not modified.`);
+                } else {
+                  throw error; // Boshqa xatoliklarni qayta tashlash
+                }
+              }
+            }
+          }
+          this.logger.log(`Trade offer ${data.tradeOfferId} accepted. Transaction ${data.transactionId} completed.`);
+        } else if (
+          tradeOfferStatus.state === TradeOfferManager.ETradeOfferState.Declined ||
+          tradeOfferStatus.state === TradeOfferManager.ETradeOfferState.Canceled ||
+          tradeOfferStatus.state === TradeOfferManager.ETradeOfferState.Expired ||
+          tradeOfferStatus.state === TradeOfferManager.ETradeOfferState.InvalidItems
+        ) {
+          // Trade offer bekor qilindi yoki xato yuzaga keldi
+          transaction.state = TransactionState.Failed;
+          await transaction.save();
+
+          // Balanslarni qaytarish
+          const buyer = await this.userModel.findById(transaction.receiver);
+          const seller = await this.userModel.findById(transaction.user);
+          const skin = await this.skinModel.findById(transaction.skin);
+
+          if (buyer) {
+            buyer.balance += Number(transaction.amount); // Xaridorga pulni qaytarish
+            await buyer.save();
+          }
+          if (seller && skin) {
+            seller.balance -= skin.seller_revenue; // Sotuvchidan olingan pulni qaytarish
+            await seller.save();
+          }
+
+          // Skin holatini qaytarish
+          if (skin) {
+            skin.status = 'available'; // Yoki boshqa mos holat
+            skin.advertising = true; // Yoki false
+            skin.buyer = null;
+            await skin.save();
+
+            if (skin.message_id) {
+              // Telegramdagi skin e'lonini qayta tiklash yoki yangilash
+              // Hozircha faqat captionni o'zgartiramiz
+              let newCaption = `❌ Xarid bekor qilindi ❌\n\n${skin.market_hash_name} - ${skin.price} tilav\n\n<i>Sabab: Trade offer bekor qilindi.</i>`;
+              await this.bot.api.editMessageCaption(
+                this.configService.get<string>('TELEGRAM_CHANNEL_ID'),
+                parseInt(skin.message_id),
+                {
+                  caption: newCaption,
+                  parse_mode: 'HTML',
+                },
+              );
+              // Tugmalarni qayta tiklash
+              const telegramBotUrl = this.configService.get<string>('TELEGRAM_BOT_URL');
+              const inlineKeyboard = new InlineKeyboard().url(
+                skin.price === 0 ? 'TEKINGA OLISH😊' : `${skin.price} so'm`,
+                `${telegramBotUrl}?startapp=skins_buy_${skin._id}`,
+              );
+              await this.bot.api.editMessageReplyMarkup(
+                this.configService.get<string>('TELEGRAM_CHANNEL_ID'),
+                parseInt(skin.message_id),
+                {
+                  reply_markup: inlineKeyboard,
+                },
+              );
+            }
+          }
+          this.logger.warn(`Trade offer ${data.tradeOfferId} failed. Transaction ${data.transactionId} failed.`);
+        } else {
+          // Trade offer hali ham kutilmoqda, jobni qayta navbatga qo'yish
+          throw new Error('Trade offer still pending, retrying...');
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to check trade offer status for ${data.tradeOfferId}: ${error.message}`,
         );
         throw error; // BullMQ qayta urinishi uchun xatolikni qaytarish
       }

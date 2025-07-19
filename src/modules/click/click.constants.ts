@@ -20,4 +20,5 @@ export enum TransactionState {
   Pending = 1,
   PendingCanceled = -1,
   PaidCanceled = -2,
+  Failed = -3,
 }

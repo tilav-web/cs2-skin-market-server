@@ -37,8 +37,11 @@ export class Transaction {
   @Prop({ type: Types.ObjectId, ref: Skin.name, default: null }) // BUY/SALE uchun
   skin: Types.ObjectId;
 
-  @Prop({ default: null })
-  description: string; // Qo‘shimcha izoh
+  @Prop({ default: null }) // Qo‘shimcha izoh
+  description: string;
+
+  @Prop({ unique: true, sparse: true, default: null }) // Steam Trade Offer ID
+  trade_offer_id: string;
 
   // CLICK API uchun maxsus maydonlar
   @Prop({ unique: true, sparse: true }) // click_trans_id, faqat CLICK uchun

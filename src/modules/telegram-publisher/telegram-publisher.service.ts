@@ -33,6 +33,11 @@ export interface CancelSaleJobData {
   replyMarkup: InlineKeyboard;
 }
 
+export interface CheckTradeOfferStatusJobData {
+  tradeOfferId: string;
+  transactionId: string;
+}
+
 @Injectable()
 export class TelegramPublisherService {
   private readonly bot: Bot;
@@ -273,5 +278,19 @@ Iltimos, profilingizdagi ma'lumotlarni to'g'rilab qo'ying.`;
         `Sotuvchiga xatolik haqida xabar yuborishda xatolik ${telegramId}: ${error.message}`,
       );
     }
+  }
+
+  async addCheckTradeOfferStatusJob(tradeOfferId: string, transactionId: string) {
+    const jobData: CheckTradeOfferStatusJobData = {
+      tradeOfferId,
+      transactionId,
+    };
+    await this.telegramQueue.add('check-trade-offer-status', jobData, {
+      delay: 10000, // 10 soniyadan keyin tekshirishni boshlash
+      attempts: 10, // 10 marta urinish
+      backoff: { type: 'exponential', delay: 60000 }, // Har bir urinish orasida 1 daqiqa kutish
+      removeOnComplete: true,
+      removeOnFail: false,
+    });
   }
 }

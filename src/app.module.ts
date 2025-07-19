@@ -9,6 +9,7 @@ import { TransactionModule } from './modules/transaction/transaction.module';
 import { TelegramPublisherModule } from './modules/telegram-publisher/telegram-publisher.module';
 import { ClickModule } from './modules/click/click.module';
 import { ReferralModule } from './modules/referral/referral.module';
+import { SteamModule } from './modules/steam/steam.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ReferralModule } from './modules/referral/referral.module';
     TelegramPublisherModule,
     ClickModule,
     ReferralModule,
+    SteamModule,
   ],
   controllers: [],
   providers: [],
