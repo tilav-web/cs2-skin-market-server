@@ -9,9 +9,8 @@ export type TransactionDocument = Transaction & Document;
 export enum TransactionType {
   DEPOSIT = 'deposit', // Pul tashlash
   WITHDRAW = 'withdraw', // Pul yechish
-  SALE = 'sale', // Skin sotish
+  TRADE = 'trade', // Skin savdosi (sotish/sotib olish)
   BONUS = 'bonus', // Bonus yoki reklama mablag‘lari
-  BUY = 'buy', // Skin sotib olish
 }
 
 @Schema()
@@ -62,7 +61,3 @@ export class Transaction {
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(Transaction);
-
-// Indekslar qo‘shish (optimallashtirish uchun)
-TransactionSchema.index({ id: 1, provider: 1 }, { unique: true, sparse: true });
-TransactionSchema.index({ user: 1, state: 1 });

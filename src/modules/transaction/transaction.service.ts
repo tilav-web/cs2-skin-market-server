@@ -5,11 +5,16 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Transaction, TransactionDocument } from './transaction.schema';
+import {
+  Transaction,
+  TransactionDocument,
+  TransactionType,
+} from './transaction.schema';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { User, UserDocument } from '../user/user.schema';
 import { Skin, SkinDocument } from '../skin/skin.schema';
 import { TelegramPublisherService } from '../telegram-publisher/telegram-publisher.service';
+import { TransactionState } from '../click/click.constants';
 
 @Injectable()
 export class TransactionService {
@@ -111,8 +116,8 @@ export class TransactionService {
         user: seller._id,
         receiver: buyer._id,
         amount: skin.price,
-        type: 'sale',
-        state: 'completed',
+        type: TransactionType.TRADE,
+        state: TransactionState.Paid,
         skin: skin._id,
         description: `${seller.personaname} dan ${buyer.personaname} ga skin sotildi`,
       });
@@ -179,18 +184,26 @@ export class TransactionService {
     return this.transactionModel.findById(id).exec();
   }
 
-  async findUserTransactions(telegramId: string): Promise<Transaction[]> {
+  async findUserTransactions(
+    telegramId: string,
+    limit?: number,
+  ): Promise<Transaction[]> {
     const user = await this.userModel.findOne({ telegram_id: telegramId });
     if (!user) {
       return [];
     }
-    return this.transactionModel
+    let query = this.transactionModel
       .find({ $or: [{ owner: user._id }, { receiver: user._id }] })
       .populate('owner', 'personaname')
       .populate('receiver', 'personaname')
       .populate('skin', 'market_hash_name icon_url')
-      .sort({ createdAt: -1 })
-      .exec();
+      .sort({ createdAt: -1 });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    return query.exec();
   }
 
   async findById(id: string): Promise<TransactionDocument> {
