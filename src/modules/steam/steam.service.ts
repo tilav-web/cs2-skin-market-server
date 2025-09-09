@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import SteamCommunity from 'steamcommunity';
 import TradeOfferManager from 'steam-tradeoffer-manager';
+import SteamUser from 'steam-user';
 
 @Injectable()
 export class SteamService {
@@ -10,6 +11,7 @@ export class SteamService {
   private readonly steamApiKey: string;
   private readonly community: SteamCommunity;
   private readonly manager: TradeOfferManager;
+  private readonly client: SteamUser;
 
   constructor(private configService: ConfigService) {
     this.steamApiKey = this.configService.get<string>('STEAM_API_KEY');
@@ -19,8 +21,9 @@ export class SteamService {
     }
 
     this.community = new SteamCommunity();
+    this.client = new SteamUser();
     this.manager = new TradeOfferManager({
-      steam: this.community,
+      steam: this.client,
       language: 'en',
       pollInterval: 5000, // Har 5 soniyada trade offerlarni tekshirish
       apiKey: this.steamApiKey,
@@ -38,19 +41,19 @@ export class SteamService {
         'STEAM_BOT_ACCOUNT_NAME or STEAM_BOT_PASSWORD is not defined. Steam features may not work.',
       );
     } else {
-      this.community.login(
-        {
-          accountName: steamBotAccountName,
-          password: steamBotPassword,
-        },
-        (err) => {
-          if (err) {
-            this.logger.error(`Steam bot login failed: ${err.message}`);
-          } else {
-            this.logger.log('Steam bot logged in successfully.');
-          }
-        },
-      );
+      this.client.logOn({
+        accountName: steamBotAccountName,
+        password: steamBotPassword,
+      });
+
+      this.client.on('loggedOn', () => {
+        this.logger.log('Steam bot logged in successfully.');
+        this.community.setCookies(this.client.steamID.steamID64);
+      });
+
+      this.client.on('error', (err) => {
+        this.logger.error(`Steam client error: ${err.message}`);
+      });
     }
 
     // Trade offer manager eventlari
